@@ -2,39 +2,11 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 
+from yolo_model import YoloModel
+
 
 class UnsupportedFormatException(Exception):
     pass
-
-
-class Model:
-    """
-    A placeholder for a real model inference engine.
-    In a real implementation, this class would load a trained model
-    and use it to predict annotations for an image.
-    """
-
-    def __init__(self, model_path: str):
-        model_file = Path(model_path)
-        if not model_file.exists():
-            raise FileNotFoundError(f"Model path does not exist: {model_path}")
-        self.model_path = model_path
-        # In a real implementation, you would load the model here, e.g.,
-        # self.model = torch.load(model_path)
-        print(f"Model loaded from {model_path}")
-
-    def predict(self, image_path: str) -> list[dict]:
-        """
-        This is a placeholder for the actual model prediction.
-        It should return annotations in a structured format.
-        """
-        print(f"Predicting for image: {image_path}")
-        # Example output: a list of detections
-        # Each detection is a dictionary with label and bounding box [xmin, ymin, xmax, ymax]
-        return [
-            {"label": "car", "box": [100, 150, 250, 300]},
-            {"label": "person", "box": [280, 80, 350, 320]},
-        ]
 
 
 class AnnotationFormatter(ABC):
@@ -45,9 +17,10 @@ class AnnotationFormatter(ABC):
     def __init__(self):
         self.output_dir = None
 
-    def initialize(self, output_dir: Path, image_paths: list[Path]):
+    def initialize(self, output_dir: Path, image_paths: list[Path], labels: dict = None):
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.labels = labels if labels else {}
 
     @abstractmethod
     def save_per_image(
@@ -65,20 +38,23 @@ class YoloFormatter(AnnotationFormatter):
     Saves one .txt file per image.
     """
 
+    def initialize(self, output_dir: Path, image_paths: list[Path], labels: dict = None):
+        super().initialize(output_dir, image_paths, labels)
+        self.label_to_id = {name: i for i, name in self.labels.items()}
+
     def save_per_image(
         self, image_path: Path, annotations: list[dict], image_size: tuple[int, int]
     ):
         # In a real scenario, you would need a mapping from label names to class indices
-        label_to_id = {"car": 0, "person": 1}  # Example mapping
         image_width, image_height = image_size
 
         lines = []
         for ann in annotations:
             label = ann.get("label")
-            if label not in label_to_id:
+            if label not in self.label_to_id:
                 continue
 
-            class_id = label_to_id[label]
+            class_id = self.label_to_id[label]
             x_min, y_min, x_max, y_max = ann.get("box", [0, 0, 0, 0])
 
             x_center = (x_min + x_max) / 2 / image_width
@@ -102,8 +78,8 @@ class CvatXmlFormatter(AnnotationFormatter):
     Saves a single annotations.xml file.
     """
 
-    def initialize(self, output_dir: Path, image_paths: list[Path]):
-        super().initialize(output_dir, image_paths)
+    def initialize(self, output_dir: Path, image_paths: list[Path], labels: dict = None):
+        super().initialize(output_dir, image_paths, labels)
         self.image_annotations = []
         self.image_paths = image_paths
 
@@ -132,9 +108,15 @@ class CvatXmlFormatter(AnnotationFormatter):
         all_annotations = "\n".join(self.image_annotations)
         num_images = len(self.image_paths)
 
-        # This should be more dynamic, but for now it's ok.
-        labels_xml = """        <label><name>car</name><color>#ff0000</color><attributes></attributes></label>
-        <label><name>person</name><color>#00ff00</color><attributes></attributes></label>"""
+        label_strings = []
+        # A simple color generator
+        colors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff"]
+        if self.labels:
+            # self.labels is dict[int, str]
+            for i, label_name in self.labels.items():
+                color = colors[i % len(colors)]
+                label_strings.append(f'        <label><name>{label_name}</name><color>{color}</color><attributes></attributes></label>')
+        labels_xml = "\n".join(label_strings)
 
         now_iso = datetime.utcnow().isoformat()
 
@@ -181,21 +163,7 @@ class AutoAnnotator:
     """
 
     def __init__(self, model_path: str):
-        self.model = Model(model_path)
-
-    def get_image_size(self, image_path: Path) -> tuple[int, int]:
-        """
-        Placeholder for getting image size.
-        A library like Pillow would be needed for a real implementation.
-        """
-        # from PIL import Image
-        # try:
-        #     with Image.open(image_path) as img:
-        #         return img.size
-        # except IOError:
-        #     print(f"Warning: Could not read image size for {image_path}. Using default.")
-        #     return (1920, 1080)
-        return (1920, 1080)  # Dummy size
+        self.model = YoloModel(model_path)
 
     def process_images(
         self, images_dir: Path, output_dir: Path, formatter: AnnotationFormatter
@@ -209,11 +177,11 @@ class AutoAnnotator:
             print(f"No images found in {images_dir}")
             return
 
-        formatter.initialize(output_dir, image_paths)
+        formatter.initialize(output_dir, image_paths, labels=self.model.labels)
 
         for image_path in image_paths:
-            annotations = self.model.predict(str(image_path))
-            image_size = self.get_image_size(image_path)
+            annotations = self.model.predict(image_path)
+            image_size = self.model.get_image_size(image_path)
             formatter.save_per_image(image_path, annotations, image_size)
 
         formatter.finalize()

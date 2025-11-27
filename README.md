@@ -24,7 +24,7 @@ This program is a standalone tool for auto-annotating images using a trained mod
 
 ### Arguments
 
--   `--model`: Path to the trained model file.
+-   `--model`: Path to the trained YOLO model file (e.g., a `.pt` file).
 -   `--images`: Path to the directory containing images to be annotated.
 -   `--output`: Path to the directory where annotation files will be saved.
 -   `--output-format`: The desired output format for annotations. Supported formats are `cvat` (default) and `yolo`.
