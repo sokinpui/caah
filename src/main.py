@@ -18,15 +18,17 @@ def main():
         description="Auto-annotate images using a trained model."
     )
     parser.add_argument(
-        "--model", type=str, required=True, help="Path to the trained model."
+        "-m", "--model", type=str, required=True, help="Path to the trained model."
     )
     parser.add_argument(
+        "-i",
         "--images",
         type=str,
         required=True,
         help="Path to the directory containing images.",
     )
     parser.add_argument(
+        "-o",
         "--output",
         type=str,
         required=True,
@@ -39,6 +41,12 @@ def main():
         choices=["cvat", "yolo"],
         help="Format for the output annotations.",
     )
+    parser.add_argument(
+        "-c",
+        "--copy",
+        action="store_true",
+        help="Copy original images to the output directory.",
+    )
 
     args = parser.parse_args()
 
@@ -50,7 +58,9 @@ def main():
     try:
         annotator = AutoAnnotator(args.model)
         formatter = get_formatter(args.output_format)
-        annotator.process_images(images_path, Path(args.output), formatter)
+        annotator.process_images(
+            images_path, Path(args.output), formatter, copy_images=args.copy
+        )
     except (FileNotFoundError, UnsupportedFormatException) as e:
         print(f"Error: {e}")
     except Exception as e:

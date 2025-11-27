@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
+import shutil
 
 from yolo_model import YoloModel
 
@@ -166,7 +167,11 @@ class AutoAnnotator:
         self.model = YoloModel(model_path)
 
     def process_images(
-        self, images_dir: Path, output_dir: Path, formatter: AnnotationFormatter
+        self,
+        images_dir: Path,
+        output_dir: Path,
+        formatter: AnnotationFormatter,
+        copy_images: bool = False,
     ):
         image_extensions = [".jpg", ".jpeg", ".png"]
         image_paths = sorted(
@@ -180,6 +185,9 @@ class AutoAnnotator:
         formatter.initialize(output_dir, image_paths, labels=self.model.labels)
 
         for image_path in image_paths:
+            if copy_images:
+                shutil.copy(image_path, output_dir)
+
             annotations = self.model.predict(image_path)
             image_size = self.model.get_image_size(image_path)
             formatter.save_per_image(image_path, annotations, image_size)
