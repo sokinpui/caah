@@ -47,6 +47,14 @@ def main():
         action="store_true",
         help="Copy original images to the output directory.",
     )
+    parser.add_argument(
+        "-d",
+        "--device",
+        type=str,
+        default="gpu",
+        choices=["gpu", "cpu"],
+        help="Device to run the model on (gpu or cpu).",
+    )
 
     args = parser.parse_args()
 
@@ -56,7 +64,7 @@ def main():
         return
 
     try:
-        annotator = AutoAnnotator(args.model)
+        annotator = AutoAnnotator(args.model, device=args.device)
         formatter = get_formatter(args.output_format)
         annotator.process_images(
             images_path, Path(args.output), formatter, copy_images=args.copy

@@ -29,6 +29,7 @@ This program is a standalone tool for auto-annotating images using a trained mod
 -   `--output`: Path to the directory where annotation files will be saved.
 -   `--output-format`: The desired output format for annotations. Supported formats are `cvat` (default) and `yolo`.
 -   `--copy`: If provided, copies the original images to the output directory.
+-   `--device`: Device to run the model on. Supported formats are `gpu` (default) and `cpu`.
 
 ### Example
 

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import cv2
+import torch
 from ultralytics import YOLO
 
 
@@ -9,14 +10,28 @@ class YoloModel:
     A class for loading a YOLO model and performing inference.
     """
 
-    def __init__(self, model_path: str):
+    def __init__(self, model_path: str, device: str = "gpu"):
         model_file = Path(model_path)
         if not model_file.exists():
             raise FileNotFoundError(f"Model path does not exist: {model_path}")
 
         self.model = YOLO(model_path)
+        self.device = self._resolve_device(device)
         self.labels = self.model.names
         print(f"YOLO model loaded from {model_path}")
+        print(f"Using device: {self.device}")
+
+    def _resolve_device(self, device: str) -> str:
+        if device == "cpu":
+            return "cpu"
+        if device == "gpu":
+            if torch.cuda.is_available():
+                return "cuda"
+            if torch.backends.mps.is_available():
+                return "mps"
+            print("Warning: GPU requested but not available. Falling back to CPU.")
+            return "cpu"
+        return device
 
     def predict(self, image_path: Path) -> list[dict]:
         """
@@ -24,8 +39,7 @@ class YoloModel:
         """
         print(f"Predicting for image: {image_path}")
 
-        # The ultralytics library can take a Path object directly
-        results = self.model(image_path, verbose=False)
+        results = self.model(image_path, verbose=False, device=self.device)
 
         annotations = []
 

@@ -163,8 +163,8 @@ class AutoAnnotator:
     Orchestrates the auto-annotation process.
     """
 
-    def __init__(self, model_path: str):
-        self.model = YoloModel(model_path)
+    def __init__(self, model_path: str, device: str = "gpu"):
+        self.model = YoloModel(model_path, device=device)
 
     def process_images(
         self,
