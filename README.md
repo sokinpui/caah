@@ -1,0 +1,1 @@
+Cvat auto annotation helper
