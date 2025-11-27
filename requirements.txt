@@ -1,0 +1,4 @@
+# For a real implementation, you would need libraries for your model
+# (e.g., torch, tensorflow) and for image processing.
+# Pillow-SIMD is a faster drop-in replacement for Pillow.
+Pillow
