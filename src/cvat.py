@@ -89,6 +89,21 @@ class CVATApi:
         print(f"Successfully created project '{name}' with ID: {project_data['id']}")
         return project_data
 
+    def list_projects(self):
+        """List all projects."""
+        url = f"{self.api_url}/projects"
+        response = self.session.get(url)
+        self._handle_error(response, "Failed to list projects")
+        return response.json()
+
+    def delete_project(self, project_id):
+        """Delete a project."""
+        url = f"{self.api_url}/projects/{project_id}"
+        response = self.session.delete(url)
+        if response.status_code != 204:
+            self._handle_error(response, f"Failed to delete project {project_id}")
+        print(f"Project {project_id} deleted successfully.")
+
     def backup_project(self, project_id, output_file):
         """Backup a project."""
         url = f"{self.api_url}/projects/{project_id}/backup/export"
@@ -131,10 +146,54 @@ class CVATApi:
         else:
             print("Project import started.")
 
+    def export_project_dataset(
+        self, project_id, output_file, format_name, save_images=False
+    ):
+        """Export a project's dataset."""
+        url = f"{self.api_url}/projects/{project_id}/dataset/export"
+        params = {"format": format_name, "save_images": save_images}
+        response = self.session.post(url, params=params)
+        self._handle_error(response, f"Failed to trigger export for project {project_id}")
+
+        if response.status_code != 202:
+            raise Exception(
+                f"Unexpected status code for export trigger: {response.status_code}\n{response.text}"
+            )
+
+        rq_id = response.json().get("rq_id")
+        if not rq_id:
+            raise Exception("Could not get request ID for export job.")
+
+        job_result = self.wait_for_job(rq_id)
+        download_url = job_result.get("result_url")
+        if not download_url:
+            raise Exception("Job finished but no result_url found.")
+
+        if not download_url.startswith(("http://", "https://")):
+            download_url = f"{self.base_url}{download_url}"
+
+        self._download_file(download_url, output_file)
+
+    def import_project_dataset(self, project_id, dataset_file, format_name):
+        """Import a dataset into a project."""
+        url = f"{self.api_url}/projects/{project_id}/dataset"
+        params = {"format": format_name}
+        with open(dataset_file, "rb") as f:
+            files = {"dataset_file": (Path(dataset_file).name, f)}
+            response = self.session.post(url, params=params, files=files)
+        self._handle_error(response, f"Failed to import dataset for project {project_id}")
+
+        if response.status_code == 202:
+            rq_id = response.json().get("rq_id")
+            self.wait_for_job(rq_id)
+            print("Dataset import job finished.")
+        else:
+            print("Dataset import started.")
+
     # --- Task Operations ---
 
-    def create_task(self, name, project_id, image_paths):
-        """Create a new task and upload images."""
+    def create_task(self, name, project_id):
+        """Create a new task."""
         url = f"{self.api_url}/tasks"
         payload = {"name": name}
         if project_id:
@@ -142,9 +201,12 @@ class CVATApi:
 
         response = self.session.post(url, json=payload)
         self._handle_error(response, f"Failed to create task '{name}'")
-        task_id = response.json()["id"]
-        print(f"Successfully created task '{name}' with ID: {task_id}")
+        task_data = response.json()
+        print(f"Successfully created task '{name}' with ID: {task_data['id']}")
+        return task_data
 
+    def attach_data_to_task(self, task_id, image_paths):
+        """Attach data (images) to a task."""
         data_url = f"{self.api_url}/tasks/{task_id}/data"
         files_to_upload = []
         try:
@@ -154,10 +216,33 @@ class CVATApi:
             data = {"image_quality": 70}
             response = self.session.post(data_url, data=data, files=files_to_upload)
             self._handle_error(response, f"Failed to upload images to task {task_id}")
-            print(f"Successfully uploaded {len(image_paths)} images to task {task_id}.")
+
+            if response.status_code == 202:
+                rq_id = response.json().get("rq_id")
+                self.wait_for_job(rq_id)
+                print("Image upload job finished.")
+            else:
+                print(
+                    f"Successfully uploaded {len(image_paths)} images to task {task_id}."
+                )
         finally:
             for _, f in files_to_upload:
                 f.close()
+
+    def list_tasks(self):
+        """List all tasks."""
+        url = f"{self.api_url}/tasks"
+        response = self.session.get(url)
+        self._handle_error(response, "Failed to list tasks")
+        return response.json()
+
+    def delete_task(self, task_id):
+        """Delete a task."""
+        url = f"{self.api_url}/tasks/{task_id}"
+        response = self.session.delete(url)
+        if response.status_code != 204:
+            self._handle_error(response, f"Failed to delete task {task_id}")
+        print(f"Task {task_id} deleted successfully.")
 
     def backup_task(self, task_id, output_file):
         """Backup a task."""
@@ -199,44 +284,44 @@ class CVATApi:
         else:
             print("Task import started.")
 
-    def export_task(self, task_id, output_file, format_name):
+    def export_task_dataset(
+        self, task_id, output_file, format_name, save_images=False
+    ):
         """Export a task's dataset."""
         url = f"{self.api_url}/tasks/{task_id}/dataset/export"
-        params = {"format": format_name}
-        payload = {"save_images": True}
-        response = self.session.post(url, params=params, json=payload)
-        self._handle_error(response, f"Failed to trigger export for task {task_id}")
+        params = {"format": format_name, "save_images": save_images}
+        response = self.session.post(url, params=params)
+        self._handle_error(response, f"Failed to trigger dataset export for task {task_id}")
 
-        rq_id = None
-        if response.status_code == 202:  # Asynchronous
-            rq_id = response.json().get("rq_id")
-        elif response.status_code != 201:  # Not sync and not async
-            self._handle_error(
-                response, f"Unexpected status code for export trigger"
+        if response.status_code != 202:
+            raise Exception(
+                f"Unexpected status code for export trigger: {response.status_code}\n{response.text}"
             )
 
-        if rq_id:
-            self.wait_for_job(rq_id)
+        rq_id = response.json().get("rq_id")
+        if not rq_id:
+            raise Exception("Could not get request ID for export job.")
 
-        download_url = f"{self.api_url}/tasks/{task_id}/dataset/export"
-        download_params = {"action": "download"}
-        print(f"Downloading from {download_url} with params {download_params}...")
-        with self.session.get(download_url, params=download_params, stream=True) as r:
-            self._handle_error(r, "Dataset download failed")
-            with open(output_file, "wb") as f:
-                shutil.copyfileobj(r.raw, f)
-        print(f"Download complete. Saved to {output_file}")
+        job_result = self.wait_for_job(rq_id)
+        download_url = job_result.get("result_url")
+        if not download_url:
+            raise Exception("Job finished but no result_url found.")
 
-    def upload_annotations(self, task_id, annotations_file, format_name):
-        """Upload annotations to a task."""
-        url = f"{self.api_url}/tasks/{task_id}/annotations"
+        if not download_url.startswith(("http://", "https://")):
+            download_url = f"{self.base_url}{download_url}"
+
+        self._download_file(download_url, output_file)
+
+    def import_annotations(self, task_id, annotations_file, format_name):
+        """Import annotations into a task."""
+        url = f"{self.api_url}/tasks/{task_id}/annotations/"
         params = {"format": format_name}
 
         with open(annotations_file, "rb") as f:
             files = {"annotation_file": (Path(annotations_file).name, f)}
-            response = self.session.put(url, params=params, files=files)
+            response = self.session.post(url, params=params, files=files)
 
-        self._handle_error(response, f"Failed to upload annotations for task {task_id}")
+        self._handle_error(response, f"Failed to import annotations for task {task_id}")
 
         if response.status_code == 202:  # Asynchronous
             rq_id = response.json().get("rq_id")
@@ -245,7 +330,7 @@ class CVATApi:
             self.wait_for_job(rq_id)
             print("Annotation upload job finished.")
         elif response.status_code == 201:  # Synchronous
-            print("Annotations uploaded successfully.")
+            print("Annotations imported successfully.")
 
 
 def main():
@@ -261,10 +346,30 @@ def main():
     p_create = project_subparsers.add_parser("create", help="Create a project")
     p_create.add_argument("--name", required=True, help="Name of the project")
     p_backup = project_subparsers.add_parser("backup", help="Backup a project")
-    p_backup.add_argument("--id", required=True, type=int, help="Project ID")
+    p_backup.add_argument("--project-id", required=True, type=int, help="Project ID")
     p_backup.add_argument("--output-file", required=True, help="Path to save backup")
-    p_import = project_subparsers.add_parser("import", help="Import a project")
+    p_import = project_subparsers.add_parser(
+        "recreate", help="Recreate a project from backup"
+    )
     p_import.add_argument("--input-file", required=True, help="Path to backup zip")
+    p_list = project_subparsers.add_parser("list", help="List projects")
+    p_delete = project_subparsers.add_parser("delete", help="Delete a project")
+    p_delete.add_argument("--project-id", required=True, type=int, help="Project ID")
+    p_import_ds = project_subparsers.add_parser(
+        "import_dataset", help="Import dataset into a project"
+    )
+    p_import_ds.add_argument("--project-id", required=True, type=int, help="Project ID")
+    p_import_ds.add_argument("--input-file", required=True, help="Path to dataset file")
+    p_import_ds.add_argument("--format", required=True, help="Dataset format")
+    p_export_ds = project_subparsers.add_parser(
+        "export_dataset", help="Export dataset from a project"
+    )
+    p_export_ds.add_argument("--project-id", required=True, type=int, help="Project ID")
+    p_export_ds.add_argument("--output-file", required=True, help="Path to save dataset")
+    p_export_ds.add_argument("--format", required=True, help="Dataset format")
+    p_export_ds.add_argument(
+        "--save-images", action="store_true", help="Include images in the export"
+    )
 
     # Task parser
     task_parser = subparsers.add_parser("task", help="Task operations")
@@ -272,20 +377,32 @@ def main():
     t_create = task_subparsers.add_parser("create", help="Create a task")
     t_create.add_argument("--name", required=True, help="Name of the task")
     t_create.add_argument("--project-id", type=int, help="Project ID to associate with")
-    t_create.add_argument("--images", nargs="+", required=True, help="Paths to images")
+    t_attach = task_subparsers.add_parser("attach", help="Attach images to a task")
+    t_attach.add_argument("--task-id", required=True, type=int, help="Task ID")
+    t_attach.add_argument("--images", nargs="+", required=True, help="Paths to images")
     t_backup = task_subparsers.add_parser("backup", help="Backup a task")
-    t_backup.add_argument("--id", required=True, type=int, help="Task ID")
+    t_backup.add_argument("--task-id", required=True, type=int, help="Task ID")
     t_backup.add_argument("--output-file", required=True, help="Path to save backup")
-    t_import = task_subparsers.add_parser("import", help="Import a task")
-    t_import.add_argument("--input-file", required=True, help="Path to backup zip")
-    t_export = task_subparsers.add_parser("export", help="Export a task dataset")
-    t_export.add_argument("--id", required=True, type=int, help="Task ID")
-    t_export.add_argument("--output-file", required=True, help="Path to save dataset")
-    t_export.add_argument("--format", required=True, help="Export format name")
-    t_upload = task_subparsers.add_parser(
-        "upload_annotations", help="Upload annotations to a task"
+    t_import = task_subparsers.add_parser(
+        "recreate", help="Recreate a task from backup"
     )
-    t_upload.add_argument("--id", required=True, type=int, help="Task ID")
+    t_import.add_argument("--input-file", required=True, help="Path to backup zip")
+    t_list = task_subparsers.add_parser("list", help="List tasks")
+    t_delete = task_subparsers.add_parser("delete", help="Delete a task")
+    t_delete.add_argument("--task-id", required=True, type=int, help="Task ID")
+    t_export_ds = task_subparsers.add_parser(
+        "export_dataset", help="Export a task dataset"
+    )
+    t_export_ds.add_argument("--task-id", required=True, type=int, help="Task ID")
+    t_export_ds.add_argument("--output-file", required=True, help="Path to save dataset")
+    t_export_ds.add_argument("--format", required=True, help="Export format name")
+    t_export_ds.add_argument(
+        "--save-images", action="store_true", help="Include images in the export"
+    )
+    t_upload = task_subparsers.add_parser(
+        "import_annotations", help="Import annotations to a task"
+    )
+    t_upload.add_argument("--task-id", required=True, type=int, help="Task ID")
     t_upload.add_argument("--input-file", required=True, help="Path to annotations file")
     t_upload.add_argument(
         "--format", required=True, help="Annotation format name (e.g., 'CVAT 1.1')"
@@ -303,21 +420,41 @@ def main():
         if args.resource == "project":
             if args.action == "create":
                 api.create_project(args.name)
+            elif args.action == "list":
+                print(api.list_projects())
+            elif args.action == "delete":
+                api.delete_project(args.project_id)
             elif args.action == "backup":
-                api.backup_project(args.id, args.output_file)
-            elif args.action == "import":
+                api.backup_project(args.project_id, args.output_file)
+            elif args.action == "recreate":
                 api.import_project(args.input_file)
+            elif args.action == "import_dataset":
+                api.import_project_dataset(
+                    args.project_id, args.input_file, args.format
+                )
+            elif args.action == "export_dataset":
+                api.export_project_dataset(
+                    args.project_id, args.output_file, args.format, args.save_images
+                )
         elif args.resource == "task":
             if args.action == "create":
-                api.create_task(args.name, args.project_id, args.images)
+                api.create_task(args.name, args.project_id)
+            elif args.action == "attach":
+                api.attach_data_to_task(args.task_id, args.images)
+            elif args.action == "list":
+                print(api.list_tasks())
+            elif args.action == "delete":
+                api.delete_task(args.task_id)
             elif args.action == "backup":
-                api.backup_task(args.id, args.output_file)
-            elif args.action == "import":
+                api.backup_task(args.task_id, args.output_file)
+            elif args.action == "recreate":
                 api.import_task(args.input_file)
-            elif args.action == "export":
-                api.export_task(args.id, args.output_file, args.format)
-            elif args.action == "upload_annotations":
-                api.upload_annotations(args.id, args.input_file, args.format)
+            elif args.action == "export_dataset":
+                api.export_task_dataset(
+                    args.task_id, args.output_file, args.format, args.save_images
+                )
+            elif args.action == "import_annotations":
+                api.import_annotations(args.task_id, args.input_file, args.format)
     except (requests.exceptions.RequestException, ValueError, Exception) as e:
         print(f"An operation failed: {e}", file=sys.stderr)
         sys.exit(1)
