@@ -153,7 +153,9 @@ class CVATApi:
         url = f"{self.api_url}/projects/{project_id}/dataset/export"
         params = {"format": format_name, "save_images": save_images}
         response = self.session.post(url, params=params)
-        self._handle_error(response, f"Failed to trigger export for project {project_id}")
+        self._handle_error(
+            response, f"Failed to trigger export for project {project_id}"
+        )
 
         if response.status_code != 202:
             raise Exception(
@@ -181,7 +183,9 @@ class CVATApi:
         with open(dataset_file, "rb") as f:
             files = {"dataset_file": (Path(dataset_file).name, f)}
             response = self.session.post(url, params=params, files=files)
-        self._handle_error(response, f"Failed to import dataset for project {project_id}")
+        self._handle_error(
+            response, f"Failed to import dataset for project {project_id}"
+        )
 
         if response.status_code == 202:
             rq_id = response.json().get("rq_id")
@@ -284,14 +288,14 @@ class CVATApi:
         else:
             print("Task import started.")
 
-    def export_task_dataset(
-        self, task_id, output_file, format_name, save_images=False
-    ):
+    def export_task_dataset(self, task_id, output_file, format_name, save_images=False):
         """Export a task's dataset."""
         url = f"{self.api_url}/tasks/{task_id}/dataset/export"
         params = {"format": format_name, "save_images": save_images}
         response = self.session.post(url, params=params)
-        self._handle_error(response, f"Failed to trigger dataset export for task {task_id}")
+        self._handle_error(
+            response, f"Failed to trigger dataset export for task {task_id}"
+        )
 
         if response.status_code != 202:
             raise Exception(
@@ -344,68 +348,107 @@ def main():
     project_parser = subparsers.add_parser("project", help="Project operations")
     project_subparsers = project_parser.add_subparsers(dest="action", required=True)
     p_create = project_subparsers.add_parser("create", help="Create a project")
-    p_create.add_argument("--name", required=True, help="Name of the project")
+    p_create.add_argument("-n", "--name", required=True, help="Name of the project")
     p_backup = project_subparsers.add_parser("backup", help="Backup a project")
-    p_backup.add_argument("--project-id", required=True, type=int, help="Project ID")
-    p_backup.add_argument("--output-file", required=True, help="Path to save backup")
+    p_backup.add_argument(
+        "-u", "--project-id", required=True, type=int, help="Project ID"
+    )
+    p_backup.add_argument(
+        "-o", "--output-file", required=True, help="Path to save backup"
+    )
     p_import = project_subparsers.add_parser(
         "recreate", help="Recreate a project from backup"
     )
-    p_import.add_argument("--input-file", required=True, help="Path to backup zip")
+    p_import.add_argument(
+        "-i", "--input-file", required=True, help="Path to backup zip"
+    )
     p_list = project_subparsers.add_parser("list", help="List projects")
     p_delete = project_subparsers.add_parser("delete", help="Delete a project")
-    p_delete.add_argument("--project-id", required=True, type=int, help="Project ID")
+    p_delete.add_argument(
+        "-u", "--project-id", required=True, type=int, help="Project ID"
+    )
     p_import_ds = project_subparsers.add_parser(
         "import_dataset", help="Import dataset into a project"
     )
-    p_import_ds.add_argument("--project-id", required=True, type=int, help="Project ID")
-    p_import_ds.add_argument("--input-file", required=True, help="Path to dataset file")
-    p_import_ds.add_argument("--format", required=True, help="Dataset format")
+    p_import_ds.add_argument(
+        "-u", "--project-id", required=True, type=int, help="Project ID"
+    )
+    p_import_ds.add_argument(
+        "-i", "--input-file", required=True, help="Path to dataset file"
+    )
+    p_import_ds.add_argument("-f", "--format", required=True, help="Dataset format")
     p_export_ds = project_subparsers.add_parser(
         "export_dataset", help="Export dataset from a project"
     )
-    p_export_ds.add_argument("--project-id", required=True, type=int, help="Project ID")
-    p_export_ds.add_argument("--output-file", required=True, help="Path to save dataset")
-    p_export_ds.add_argument("--format", required=True, help="Dataset format")
     p_export_ds.add_argument(
-        "--save-images", action="store_true", help="Include images in the export"
+        "-u", "--project-id", required=True, type=int, help="Project ID"
+    )
+    p_export_ds.add_argument(
+        "-o", "--output-file", required=True, help="Path to save dataset"
+    )
+    p_export_ds.add_argument("-f", "--format", required=True, help="Dataset format")
+    p_export_ds.add_argument(
+        "-s",
+        "--save-images",
+        action="store_true",
+        help="Include images in the export",
     )
 
     # Task parser
     task_parser = subparsers.add_parser("task", help="Task operations")
     task_subparsers = task_parser.add_subparsers(dest="action", required=True)
     t_create = task_subparsers.add_parser("create", help="Create a task")
-    t_create.add_argument("--name", required=True, help="Name of the task")
-    t_create.add_argument("--project-id", type=int, help="Project ID to associate with")
+    t_create.add_argument("-n", "--name", required=True, help="Name of the task")
+    t_create.add_argument(
+        "-u", "--project-id", type=int, help="Project ID to associate with"
+    )
     t_attach = task_subparsers.add_parser("attach", help="Attach images to a task")
-    t_attach.add_argument("--task-id", required=True, type=int, help="Task ID")
-    t_attach.add_argument("--images", nargs="+", required=True, help="Paths to images")
+    t_attach.add_argument("-tid", "--task-id", required=True, type=int, help="Task ID")
+    t_attach.add_argument(
+        "-i", "--images", nargs="+", required=True, help="Paths to images"
+    )
     t_backup = task_subparsers.add_parser("backup", help="Backup a task")
-    t_backup.add_argument("--task-id", required=True, type=int, help="Task ID")
-    t_backup.add_argument("--output-file", required=True, help="Path to save backup")
+    t_backup.add_argument("-tid", "--task-id", required=True, type=int, help="Task ID")
+    t_backup.add_argument(
+        "-o", "--output-file", required=True, help="Path to save backup"
+    )
     t_import = task_subparsers.add_parser(
         "recreate", help="Recreate a task from backup"
     )
-    t_import.add_argument("--input-file", required=True, help="Path to backup zip")
+    t_import.add_argument(
+        "-i", "--input-file", required=True, help="Path to backup zip"
+    )
     t_list = task_subparsers.add_parser("list", help="List tasks")
     t_delete = task_subparsers.add_parser("delete", help="Delete a task")
-    t_delete.add_argument("--task-id", required=True, type=int, help="Task ID")
+    t_delete.add_argument("-tid", "--task-id", required=True, type=int, help="Task ID")
     t_export_ds = task_subparsers.add_parser(
         "export_dataset", help="Export a task dataset"
     )
-    t_export_ds.add_argument("--task-id", required=True, type=int, help="Task ID")
-    t_export_ds.add_argument("--output-file", required=True, help="Path to save dataset")
-    t_export_ds.add_argument("--format", required=True, help="Export format name")
     t_export_ds.add_argument(
-        "--save-images", action="store_true", help="Include images in the export"
+        "-tid", "--task-id", required=True, type=int, help="Task ID"
+    )
+    t_export_ds.add_argument(
+        "-o", "--output-file", required=True, help="Path to save dataset"
+    )
+    t_export_ds.add_argument("-f", "--format", required=True, help="Export format name")
+    t_export_ds.add_argument(
+        "-s",
+        "--save-images",
+        action="store_true",
+        help="Include images in the export",
     )
     t_upload = task_subparsers.add_parser(
         "import_annotations", help="Import annotations to a task"
     )
-    t_upload.add_argument("--task-id", required=True, type=int, help="Task ID")
-    t_upload.add_argument("--input-file", required=True, help="Path to annotations file")
+    t_upload.add_argument("-tid", "--task-id", required=True, type=int, help="Task ID")
     t_upload.add_argument(
-        "--format", required=True, help="Annotation format name (e.g., 'CVAT 1.1')"
+        "-i", "--input-file", required=True, help="Path to annotations file"
+    )
+    t_upload.add_argument(
+        "-f",
+        "--format",
+        required=True,
+        help="Annotation format name (e.g., 'CVAT 1.1')",
     )
 
     args = parser.parse_args()
