@@ -1,9 +1,5 @@
 from pathlib import Path
 
-import cv2
-import torch
-from ultralytics import YOLO
-
 
 class YoloModel:
     """
@@ -11,6 +7,9 @@ class YoloModel:
     """
 
     def __init__(self, model_path: str, device: str = "gpu"):
+        import torch
+        from ultralytics import YOLO
+
         model_file = Path(model_path)
         if not model_file.exists():
             raise FileNotFoundError(f"Model path does not exist: {model_path}")
@@ -22,6 +21,8 @@ class YoloModel:
         print(f"Using device: {self.device}")
 
     def _resolve_device(self, device: str) -> str:
+        import torch
+
         if device == "cpu":
             return "cpu"
         if device == "gpu":
@@ -76,6 +77,8 @@ class YoloModel:
         """
         Gets the width and height of an image.
         """
+        import cv2
+
         img = cv2.imread(str(image_path))
         if img is None:
             print(

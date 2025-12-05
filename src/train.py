@@ -3,8 +3,6 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from ultralytics import YOLO
-
 
 def find_yaml_file(directory: Path) -> Path:
     """
@@ -33,6 +31,8 @@ def train_model(
     Initializes and trains the YOLO model.
     """
     print("--- Starting Training ---")
+    from ultralytics import YOLO
+
     print(f"Data: {data_yaml_path}")
     print(f"Model: {model_size}")
     print(f"Epochs: {epochs}")
