@@ -9,6 +9,103 @@ import requests
 from dotenv import load_dotenv
 
 
+class TableFormatter:
+    """Utility class for formatting data as human-readable tables."""
+
+    @staticmethod
+    def format_projects_table(projects_data: dict) -> str:
+        """Format projects list as a readable table."""
+        if not projects_data or "results" not in projects_data:
+            return "No projects found"
+
+        projects = projects_data["results"]
+        if not projects:
+            return "No projects found"
+
+        # Create header
+        header = ["ID", "Name", "Owner", "Status", "Tasks", "Created"]
+        separator = "-" * 80
+
+        # Format each project
+        lines = [separator]
+        lines.append(
+            f"{header[0]:<4} {header[1]:<20} {header[2]:<12} {header[3]:<12} {header[4]:<6} {header[5]:<16}"
+        )
+        lines.append(separator)
+
+        for project in projects:
+            project_id = str(project.get("id", ""))
+            name = project.get("name", "")[:18] + (
+                ".." if len(project.get("name", "")) > 18 else ""
+            )
+            owner = project.get("owner", {}).get("username", "")[:10] + (
+                ".." if len(project.get("owner", {}).get("username", "")) > 10 else ""
+            )
+            status = project.get("status", "")[:10]
+            tasks_count = str(project.get("tasks", {}).get("count", 0))
+            created = project.get("created_date", "")[:10]  # Just date part
+
+            lines.append(
+                f"{project_id:<4} {name:<20} {owner:<12} {status:<12} {tasks_count:<6} {created:<16}"
+            )
+
+        lines.append(separator)
+        lines.append(f"Total: {len(projects)} project(s)")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def format_tasks_table(tasks_data: dict) -> str:
+        """Format tasks list as a readable table."""
+        if not tasks_data or "results" not in tasks_data:
+            return "No tasks found"
+
+        tasks = tasks_data["results"]
+        if not tasks:
+            return "No tasks found"
+
+        # Create header
+        header = ["ID", "Name", "Project ID", "Owner", "Status", "Size", "Created"]
+        separator = "-" * 90
+
+        # Format each task
+        lines = [separator]
+        lines.append(
+            f"{header[0]:<4} {header[1]:<20} {header[2]:<10} {header[3]:<12} {header[4]:<12} {header[5]:<6} {header[6]:<16}"
+        )
+        lines.append(separator)
+
+        for task in tasks:
+            task_id = str(task.get("id", ""))
+            name = task.get("name", "")[:18] + (
+                ".." if len(task.get("name", "")) > 18 else ""
+            )
+            project_id = str(task.get("project_id", "-"))
+            owner = task.get("owner", {}).get("username", "")[:10] + (
+                ".." if len(task.get("owner", {}).get("username", "")) > 10 else ""
+            )
+            status = task.get("status", "")[:10]
+            size = str(task.get("size", 0))
+            created = task.get("created_date", "")[:10]  # Just date part
+
+            lines.append(
+                f"{task_id:<4} {name:<20} {project_id:<10} {owner:<12} {status:<12} {size:<6} {created:<16}"
+            )
+
+        lines.append(separator)
+
+        # Add summary information
+        total_tasks = len(tasks)
+        completed_tasks = sum(1 for t in tasks if t.get("status") == "completed")
+        in_progress_tasks = sum(1 for t in tasks if t.get("status") == "annotation")
+
+        lines.append(
+            f"Total: {total_tasks} task(s) | Completed: {completed_tasks} | In Progress: {in_progress_tasks}"
+        )
+
+        return "\n".join(lines)
+
+
 class CVATApi:
     """A class to interact with the CVAT REST API without the CVAT-SDK."""
 
@@ -91,7 +188,7 @@ class CVATApi:
 
     def list_projects(self):
         """List all projects."""
-        url = f"{self.api_url}/projects"
+        url = f"{self.api_url}/projects?page_size=100"  # Get more items per page
         response = self.session.get(url)
         self._handle_error(response, "Failed to list projects")
         return response.json()
@@ -235,7 +332,7 @@ class CVATApi:
 
     def list_tasks(self):
         """List all tasks."""
-        url = f"{self.api_url}/tasks"
+        url = f"{self.api_url}/tasks?page_size=100"  # Get more items per page
         response = self.session.get(url)
         self._handle_error(response, "Failed to list tasks")
         return response.json()
@@ -464,7 +561,7 @@ def main():
             if args.action == "create":
                 api.create_project(args.name)
             elif args.action == "list":
-                print(api.list_projects())
+                print(TableFormatter.format_projects_table(api.list_projects()))
             elif args.action == "delete":
                 api.delete_project(args.project_id)
             elif args.action == "backup":
@@ -485,7 +582,7 @@ def main():
             elif args.action == "attach":
                 api.attach_data_to_task(args.task_id, args.images)
             elif args.action == "list":
-                print(api.list_tasks())
+                print(TableFormatter.format_tasks_table(api.list_tasks()))
             elif args.action == "delete":
                 api.delete_task(args.task_id)
             elif args.action == "backup":

@@ -1,4 +1,5 @@
 ultralytics
 python-dotenv
 requests
+tabulate
 
