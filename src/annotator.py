@@ -1,7 +1,9 @@
+import argparse
+import shutil
+import sys
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-import shutil
 
 from yolo_model import YoloModel
 
@@ -18,7 +20,9 @@ class AnnotationFormatter(ABC):
     def __init__(self):
         self.output_dir = None
 
-    def initialize(self, output_dir: Path, image_paths: list[Path], labels: dict = None):
+    def initialize(
+        self, output_dir: Path, image_paths: list[Path], labels: dict = None
+    ):
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.labels = labels if labels else {}
@@ -39,7 +43,9 @@ class YoloFormatter(AnnotationFormatter):
     Saves one .txt file per image.
     """
 
-    def initialize(self, output_dir: Path, image_paths: list[Path], labels: dict = None):
+    def initialize(
+        self, output_dir: Path, image_paths: list[Path], labels: dict = None
+    ):
         super().initialize(output_dir, image_paths, labels)
         self.label_to_id = {name: i for i, name in self.labels.items()}
 
@@ -79,7 +85,9 @@ class CvatXmlFormatter(AnnotationFormatter):
     Saves a single annotations.xml file.
     """
 
-    def initialize(self, output_dir: Path, image_paths: list[Path], labels: dict = None):
+    def initialize(
+        self, output_dir: Path, image_paths: list[Path], labels: dict = None
+    ):
         super().initialize(output_dir, image_paths, labels)
         self.image_annotations = []
         self.image_paths = image_paths
@@ -116,7 +124,9 @@ class CvatXmlFormatter(AnnotationFormatter):
             # self.labels is dict[int, str]
             for i, label_name in self.labels.items():
                 color = colors[i % len(colors)]
-                label_strings.append(f'        <label><name>{label_name}</name><color>{color}</color><attributes></attributes></label>')
+                label_strings.append(
+                    f"        <label><name>{label_name}</name><color>{color}</color><attributes></attributes></label>"
+                )
         labels_xml = "\n".join(label_strings)
 
         now_iso = datetime.utcnow().isoformat()
@@ -193,3 +203,74 @@ class AutoAnnotator:
             formatter.save_per_image(image_path, annotations, image_size)
 
         formatter.finalize()
+
+
+def main():
+    """
+    Main function to run the auto-annotation process.
+    It parses command-line arguments, initializes the annotator and formatter,
+    and processes the images.
+    """
+    parser = argparse.ArgumentParser(
+        description="Auto-annotate images using a trained model."
+    )
+    parser.add_argument(
+        "-m", "--model", type=str, required=True, help="Path to the trained model."
+    )
+    parser.add_argument(
+        "-i",
+        "--images",
+        type=str,
+        required=True,
+        help="Path to the directory containing images.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        required=True,
+        help="Path to the directory to save annotations.",
+    )
+    parser.add_argument(
+        "--output-format",
+        type=str,
+        default="cvat",
+        choices=["cvat", "yolo"],
+        help="Format for the output annotations.",
+    )
+    parser.add_argument(
+        "-c",
+        "--copy",
+        action="store_true",
+        help="Copy original images to the output directory.",
+    )
+    parser.add_argument(
+        "-d",
+        "--device",
+        type=str,
+        default="gpu",
+        choices=["gpu", "cpu"],
+        help="Device to run the model on (gpu or cpu).",
+    )
+
+    args = parser.parse_args()
+
+    images_path = Path(args.images)
+    if not images_path.is_dir():
+        print(f"Error: Image directory not found at {args.images}")
+        return
+
+    try:
+        annotator = AutoAnnotator(args.model, device=args.device)
+        formatter = get_formatter(args.output_format)
+        annotator.process_images(
+            images_path, Path(args.output), formatter, copy_images=args.copy
+        )
+    except (FileNotFoundError, UnsupportedFormatException) as e:
+        print(f"Error: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+
+if __name__ == "__main__":
+    main()

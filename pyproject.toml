@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "caah"
+version = "0.1.0"
+authors = [
+  { name="sokinpui" },
+]
+description = "Cvat auto annotation helper"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "ultralytics",
+    "python-dotenv",
+    "requests",
+    "opencv-python",
+    "torch",
+]
+
+[project.urls]
+Homepage = "https://github.com/sokinpui/caah"
+Repository = "https://github.com/sokinpui/caah.git"
+"Bug Tracker" = "https://github.com/sokinpui/caah/issues"
+
+[project.scripts]
+caah = "main:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["main", "annotator", "cvat", "yolo_model"]
