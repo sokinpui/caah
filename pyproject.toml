@@ -22,6 +22,7 @@ dependencies = [
     "opencv-python",
     "tabulate",
     "torch",
+    "argcomplete",
 ]
 
 [project.urls]

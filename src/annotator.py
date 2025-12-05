@@ -205,15 +205,10 @@ class AutoAnnotator:
         formatter.finalize()
 
 
-def main():
+def add_annotate_arguments(parser):
     """
-    Main function to run the auto-annotation process.
-    It parses command-line arguments, initializes the annotator and formatter,
-    and processes the images.
+    Adds annotation-specific arguments to the parser.
     """
-    parser = argparse.ArgumentParser(
-        description="Auto-annotate images using a trained model."
-    )
     parser.add_argument(
         "-m", "--model", type=str, required=True, help="Path to the trained model."
     )
@@ -245,7 +240,6 @@ def main():
         help="Copy original images to the output directory.",
     )
     parser.add_argument(
-        "-d",
         "--device",
         type=str,
         default="gpu",
@@ -253,8 +247,11 @@ def main():
         help="Device to run the model on (gpu or cpu).",
     )
 
-    args = parser.parse_args()
 
+def run_annotate(args):
+    """
+    Runs the annotation process with parsed arguments.
+    """
     images_path = Path(args.images)
     if not images_path.is_dir():
         print(f"Error: Image directory not found at {args.images}")
@@ -270,6 +267,20 @@ def main():
         print(f"Error: {e}")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+
+
+def main():
+    """
+    Main function to run the auto-annotation process.
+    It parses command-line arguments, initializes the annotator and formatter,
+    and processes the images.
+    """
+    parser = argparse.ArgumentParser(
+        description="Auto-annotate images using a trained model."
+    )
+    add_annotate_arguments(parser)
+    args = parser.parse_args()
+    run_annotate(args)
 
 
 if __name__ == "__main__":

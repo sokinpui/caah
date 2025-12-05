@@ -81,14 +81,10 @@ def process_dataset_and_train(
         train_model(data_yaml_path, model_size, epochs, img_size, batch_size, device)
 
 
-def main():
+def add_train_arguments(parser):
     """
-    Main function to parse arguments and start the training process.
+    Adds training-specific arguments to the parser.
     """
-    parser = argparse.ArgumentParser(
-        description="Train a YOLO model using a zipped CVAT export."
-    )
-
     parser.add_argument(
         "-d",
         "--data",
@@ -111,7 +107,7 @@ def main():
         help="Number of training epochs. Default: 50",
     )
     parser.add_argument(
-        "-i", "--imgsz", type=int, default=640, help="Image size (pixels). Default: 640"
+        "--imgsz", type=int, default=640, help="Image size (pixels). Default: 640"
     )
     parser.add_argument(
         "-b",
@@ -121,15 +117,17 @@ def main():
         help="Batch size (reduce for GPU OOM errors). Default: 16",
     )
     parser.add_argument(
-        "-d",
         "--device",
         type=str,
         default="0",
         help="Device to use: '0' for GPU, 'cpu' for CPU. Default: 0",
     )
 
-    args = parser.parse_args()
 
+def run_train(args):
+    """
+    Runs the training process with parsed arguments.
+    """
     try:
         process_dataset_and_train(
             dataset_zip_path=args.data,
@@ -143,6 +141,18 @@ def main():
         print(f"Error: {e}")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+
+
+def main():
+    """
+    Main function to run the training script directly.
+    """
+    parser = argparse.ArgumentParser(
+        description="Train a YOLO model using a zipped CVAT export."
+    )
+    add_train_arguments(parser)
+    args = parser.parse_args()
+    run_train(args)
 
 
 if __name__ == "__main__":

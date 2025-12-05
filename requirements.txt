@@ -2,4 +2,5 @@ ultralytics
 python-dotenv
 requests
 tabulate
+argcomplete
 

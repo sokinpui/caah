@@ -1,30 +1,41 @@
+import argparse
 import sys
+import argcomplete
 
-from annotator import main as annotator_main
-from cvat import main as cvat_main
-from train import main as train_main
+from annotator import add_annotate_arguments, run_annotate
+from cvat import run_cvat, setup_cvat_parser
+from train import add_train_arguments, run_train
 
 
 def main():
     """
-    Main entry point to combine annotator and cvat scripts.
-    Dispatches to the appropriate main function based on the first argument.
+    Main entry point for the command-line interface.
     """
-    if len(sys.argv) < 2:
-        print("Usage: python src/main.py [annotate|cvat|train] [args...]")
-        print("Available commands: annotate, cvat, train")
+    parser = argparse.ArgumentParser(description="Cvat auto annotation helper.")
+    subparsers = parser.add_subparsers(
+        dest="command", required=True, help="Available commands"
+    )
+
+    annotate_parser = subparsers.add_parser("annotate", help="Run auto-annotation.")
+    add_annotate_arguments(annotate_parser)
+    annotate_parser.set_defaults(func=run_annotate)
+
+    cvat_parser = subparsers.add_parser("cvat", help="Interact with a CVAT instance.")
+    setup_cvat_parser(cvat_parser)
+    cvat_parser.set_defaults(func=run_cvat)
+
+    train_parser = subparsers.add_parser("train", help="Train a YOLO model.")
+    add_train_arguments(train_parser)
+    train_parser.set_defaults(func=run_train)
+
+    argcomplete.autocomplete(parser)
+
+    args = parser.parse_args()
+    if hasattr(args, "func"):
+        args.func(args)
+    else:
+        parser.print_help()
         sys.exit(1)
-
-    command = sys.argv[1]
-    main_functions = {"annotate": annotator_main, "cvat": cvat_main, "train": train_main}
-
-    if command not in main_functions:
-        print(f"Unknown command: {command}")
-        print(f"Available commands: {', '.join(main_functions.keys())}")
-        sys.exit(1)
-
-    sys.argv = [f"{sys.argv[0]} {command}"] + sys.argv[2:]
-    main_functions[command]()
 
 
 if __name__ == "__main__":

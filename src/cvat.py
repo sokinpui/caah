@@ -434,13 +434,9 @@ class CVATApi:
             print("Annotations imported successfully.")
 
 
-def main():
-    """Main function to run the CVAT API client."""
-    load_dotenv()
-
-    parser = argparse.ArgumentParser(description="CVAT REST API client.")
+def setup_cvat_parser(parser):
+    """Adds CVAT-specific subcommands to the parser."""
     subparsers = parser.add_subparsers(dest="resource", required=True)
-
     # Project parser
     project_parser = subparsers.add_parser("project", help="Project operations")
     project_subparsers = project_parser.add_subparsers(dest="action", required=True)
@@ -548,8 +544,12 @@ def main():
         help="Annotation format name (e.g., 'CVAT 1.1')",
     )
 
-    args = parser.parse_args()
 
+def run_cvat(args):
+    """
+    Executes the CVAT command based on parsed arguments.
+    """
+    load_dotenv()
     try:
         api = CVATApi(
             os.getenv("CVAT_URL"),
@@ -598,6 +598,14 @@ def main():
     except (requests.exceptions.RequestException, ValueError, Exception) as e:
         print(f"An operation failed: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def main():
+    """Main function to run the CVAT API client."""
+    parser = argparse.ArgumentParser(description="CVAT REST API client.")
+    setup_cvat_parser(parser)
+    args = parser.parse_args()
+    run_cvat(args)
 
 
 if __name__ == "__main__":

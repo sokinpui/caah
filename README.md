@@ -7,6 +7,7 @@ This program is a standalone tool for auto-annotating images using a trained mod
 -   Command-line interface for ease of use.
 -   Supports different annotation formats (CVAT XML, YOLO).
 -   Modular design for easy extension with new models or formats.
+-   Shell autocompletion support.
 
 ## Usage
 
@@ -16,7 +17,24 @@ This program is a standalone tool for auto-annotating images using a trained mod
     pip install -r requirements.txt
     ```
 
-2.  **Running the annotation**
+2.  **Enable Autocompletion (Optional, Recommended)**
+
+    To enable shell command completion, you need to register the script with `argcomplete`.
+
+    For Bash (add to `~/.bashrc`):
+    ```bash
+    eval "$(register-python-argcomplete caah)"
+    ```
+
+    For Zsh (add to `~/.zshrc`):
+    ```bash
+    # Ensure bashcompinit is loaded
+    autoload -U +X bashcompinit && bashcompinit
+    eval "$(register-python-argcomplete caah)"
+    ```
+    You may need to restart your shell for the changes to take effect.
+
+3.  **Running the annotation**
 
     ```bash
     python src/main.py --model <path_to_model> --images <path_to_images_dir> --output <path_to_output_dir> --output-format <format>
