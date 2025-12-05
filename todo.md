@@ -17,3 +17,11 @@ user check:
 loop2:
 
 same step, but tarin on user anomanually annotated data
+
+# train yolo model ( program )
+
+expect annotated dataset in "Ultralytics YOLO Detection 1.0" format
+
+# data format convertor
+
+using Datumaro
