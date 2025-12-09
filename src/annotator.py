@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 
+from yolo_model import YoloModel
+
 
 class UnsupportedFormatException(Exception):
     pass
@@ -170,9 +172,6 @@ class AutoAnnotator:
     """
     Orchestrates the auto-annotation process.
     """
-
-    from yolo_model import YoloModel
-
     def __init__(self, model_path: str, device: str = "gpu"):
         self.model = YoloModel(model_path, device=device)
 
@@ -252,8 +251,6 @@ def run_annotate(args):
     """
     Runs the annotation process with parsed arguments.
     """
-    from yolo_model import YoloModel
-
     images_path = Path(args.images)
     if not images_path.is_dir():
         print(f"Error: Image directory not found at {args.images}")
