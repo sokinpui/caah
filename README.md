@@ -1,4 +1,3 @@
-
 # Cvat Auto Annotation Helper (`caah`)
 
 This program is a standalone tool for auto-annotating images using a trained model. It is designed to be used in conjunction with CVAT, allowing for easy import of generated annotations.
@@ -16,6 +15,7 @@ It also includes utilities for training models, converting dataset formats, and 
 ## Installation
 
 1.  Clone the repository:
+
     ```bash
     git clone https://github.com/sokinpui/caah.git
     cd caah
@@ -91,16 +91,17 @@ To enable shell command completion, you need to register the script with `argcom
 
 For Bash (add to `~/.bashrc`):
 
-    ```bash
-    eval "$(register-python-argcomplete caah)"
-    ```
+```bash
+eval "$(register-python-argcomplete caah)"
+```
 
 For Zsh (add to `~/.zshrc`):
 
-    ```bash
-    # Ensure bashcompinit is loaded
-    autoload -U +X bashcompinit && bashcompinit
-    eval "$(register-python-argcomplete caah)"
+````bash
+# Ensure bashcompinit is loaded
+autoload -U +X bashcompinit && bashcompinit
+eval "$(register-python-argcomplete caah)"
     ```
 
 You may need to restart your shell for the changes to take effect.
+````
