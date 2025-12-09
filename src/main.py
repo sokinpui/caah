@@ -4,6 +4,7 @@ import argcomplete
 
 from annotator import add_annotate_arguments, run_annotate
 from cvat import run_cvat, setup_cvat_parser
+from converter import add_convert_arguments, run_convert
 from train import add_train_arguments, run_train
 
 
@@ -19,6 +20,14 @@ def main():
     annotate_parser = subparsers.add_parser("annotate", help="Run auto-annotation.")
     add_annotate_arguments(annotate_parser)
     annotate_parser.set_defaults(func=run_annotate)
+
+    convert_parser = subparsers.add_parser(
+        "convert",
+        help="Convert dataset format locally.",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    add_convert_arguments(convert_parser)
+    convert_parser.set_defaults(func=run_convert)
 
     cvat_parser = subparsers.add_parser("cvat", help="Interact with a CVAT instance.")
     setup_cvat_parser(cvat_parser)

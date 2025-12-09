@@ -36,4 +36,4 @@ caah = "main:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-py-modules = ["main", "annotator", "cvat", "yolo_model", "train"]
+py-modules = ["main", "annotator", "cvat", "yolo_model", "train", "converter"]
