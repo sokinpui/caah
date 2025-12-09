@@ -1,33 +1,101 @@
-Cvat auto annotation helper
+
+# Cvat Auto Annotation Helper (`caah`)
 
 This program is a standalone tool for auto-annotating images using a trained model. It is designed to be used in conjunction with CVAT, allowing for easy import of generated annotations.
+It also includes utilities for training models, converting dataset formats, and interacting with a CVAT instance via its REST API.
 
 ## Features
 
-- Command-line interface for ease of use.
-- Supports different annotation formats (CVAT XML, YOLO).
-- Modular design for easy extension with new models or formats.
-- Shell autocompletion support.
+- **Auto-annotation**: Predict bounding boxes on a set of images using a trained YOLO model.
+- **Model Training**: Train a YOLO model with a dataset exported from CVAT.
+- **Dataset Conversion**: Convert annotation formats between different types (e.g., CVAT to YOLO) locally.
+- **CVAT Integration**: A command-line client to interact with a CVAT server's REST API for managing projects.
+- **Command-line interface**: Easy to use and scriptable.
+- **Shell Autocompletion**: Supports `argcomplete` for easy command discovery.
 
-## Usage
+## Installation
 
-1.  **Installation**
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/sokinpui/caah.git
+    cd caah
+    ```
 
+2.  Install the required dependencies:
     ```bash
     pip install -r requirements.txt
     ```
 
-2.  **Enable Autocompletion (Optional, Recommended)**
+## Configuration
 
-    To enable shell command completion, you need to register the script with `argcomplete`.
+For interacting with a CVAT server, create a `.env` file in the root directory of the project and add your credentials:
 
-    For Bash (add to `~/.bashrc`):
+```CVAT_URL=http://localhost:8080
+CVAT_USERNAME=your_username
+CVAT_PASSWORD=your_password
+```
+
+## Usage
+
+The tool is organized into several commands. You can see all available commands by running:
+
+```bash
+caah --help
+```
+
+### `annotate`
+
+Automatically generate annotations for a directory of images.
+
+```bash
+# Example: Annotate images and save in CVAT XML format
+caah annotate --model /path/to/your/best.pt --images /path/to/images --output /path/to/output_dir --output-format cvat
+```
+
+### `train`
+
+Train a YOLO model using a dataset in "Ultralytics YOLO" format, typically exported from CVAT as a zip file.
+
+```bash
+# Example: Train a yolo11n model for 50 epochs
+caah train --data /path/to/dataset.zip --model yolo11n --epochs 50
+```
+
+### `convert`
+
+Convert annotation formats from one type to another. This is useful for preparing datasets for different training frameworks.
+
+```bash
+# Example: Convert a CVAT export to YOLO format
+caah convert --from cvat --to yolo --input-file cvat_export.zip --output-file yolo_dataset.zip
+```
+
+### `cvat`
+
+Interact with a CVAT server. Make sure you have configured your `.env` file.
+
+```bash
+# List all projects
+caah cvat project list
+
+# Create a new project
+caah cvat project create --name "My New Project"
+
+# Export a project's dataset in YOLO format
+caah cvat project export_dataset --project-id 1 --format "YOLO 1.1" --output-file dataset_export.zip
+```
+
+### Shell Autocompletion (Optional, Recommended)
+
+To enable shell command completion, you need to register the script with `argcomplete`.
+
+For Bash (add to `~/.bashrc`):
 
     ```bash
     eval "$(register-python-argcomplete caah)"
     ```
 
-    For Zsh (add to `~/.zshrc`):
+For Zsh (add to `~/.zshrc`):
 
     ```bash
     # Ensure bashcompinit is loaded
@@ -35,4 +103,4 @@ This program is a standalone tool for auto-annotating images using a trained mod
     eval "$(register-python-argcomplete caah)"
     ```
 
-    You may need to restart your shell for the changes to take effect.
+You may need to restart your shell for the changes to take effect.
