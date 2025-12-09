@@ -3,4 +3,5 @@ python-dotenv
 requests
 tabulate
 argcomplete
+datumaro
 

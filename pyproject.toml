@@ -23,6 +23,7 @@ dependencies = [
     "tabulate",
     "torch",
     "argcomplete",
+    "datumaro",
 ]
 
 [project.urls]
