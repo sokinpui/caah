@@ -6,6 +6,7 @@ import argcomplete
 from annotator import add_annotate_arguments, run_annotate
 from cvat import run_cvat, setup_cvat_parser
 from converter import add_convert_arguments, run_convert
+from data_utils import setup_data_parser
 from train import add_train_arguments, run_train
 
 
@@ -37,6 +38,9 @@ def main():
     train_parser = subparsers.add_parser("train", help="Train a YOLO model.")
     add_train_arguments(train_parser)
     train_parser.set_defaults(func=run_train)
+
+    data_parser = subparsers.add_parser("data", help="Dataset utilities.")
+    setup_data_parser(data_parser)
 
     argcomplete.autocomplete(parser)
 

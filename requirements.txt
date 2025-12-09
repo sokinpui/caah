@@ -4,4 +4,4 @@ requests
 tabulate
 argcomplete
 datumaro
-
+pyyaml
