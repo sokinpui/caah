@@ -54,6 +54,11 @@ def add_convert_arguments(parser):
             "For a full list, refer to Datumaro documentation."
         ),
     )
+    parser.add_argument(
+        "--stdout",
+        action="store_true",
+        help="Suppress all messages except the final file path to stdout.",
+    )
 
 
 def run_convert(args):
@@ -72,11 +77,14 @@ def run_convert(args):
         input_dir.mkdir()
         output_dir.mkdir()
 
-        print(f"Extracting {input_zip} to temporary directory...")
+        print(f"Extracting {input_zip} to temporary directory...", file=sys.stderr)
         with zipfile.ZipFile(input_zip, "r") as zip_ref:
             zip_ref.extractall(input_dir)
 
-        print(f"Importing dataset from {input_dir} (format: {args.from_format})...")
+        print(
+            f"Importing dataset from {input_dir} (format: {args.from_format})...",
+            file=sys.stderr,
+        )
         try:
             dataset = dm.Dataset.import_from(
                 str(input_dir), format=args.from_format.lower()
@@ -86,20 +94,22 @@ def run_convert(args):
             print(
                 "Files in extracted directory:",
                 [str(p.relative_to(input_dir)) for p in input_dir.rglob("*")],
+                file=sys.stderr,
             )
             sys.exit(1)
 
-        print(f"Exporting dataset to {output_dir} (format: {args.to_format.lower()})...")
-        dataset.export(
-            str(output_dir), format=args.to_format.lower(), save_media=True
+        print(
+            f"Exporting dataset to {output_dir} (format: {args.to_format.lower()})...",
+            file=sys.stderr,
         )
+        dataset.export(str(output_dir), format=args.to_format.lower(), save_media=True)
 
-        print(f"Creating output zip file at {output_zip}...")
+        print(f"Creating output zip file at {output_zip}...", file=sys.stderr)
         with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
             for entry in output_dir.rglob("*"):
                 zipf.write(entry, entry.relative_to(output_dir))
 
-    print(f"Conversion complete. Output saved to {output_zip}")
+    print(output_zip)
 
 
 def main():

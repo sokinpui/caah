@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 
 class YoloModel:
@@ -17,8 +18,8 @@ class YoloModel:
         self.model = YOLO(model_path)
         self.device = self._resolve_device(device)
         self.labels = self.model.names
-        print(f"YOLO model loaded from {model_path}")
-        print(f"Using device: {self.device}")
+        print(f"YOLO model loaded from {model_path}", file=sys.stderr)
+        print(f"Using device: {self.device}", file=sys.stderr)
 
     def _resolve_device(self, device: str) -> str:
         import torch
@@ -30,7 +31,10 @@ class YoloModel:
                 return "cuda"
             if torch.backends.mps.is_available():
                 return "mps"
-            print("Warning: GPU requested but not available. Falling back to CPU.")
+            print(
+                "Warning: GPU requested but not available. Falling back to CPU.",
+                file=sys.stderr,
+            )
             return "cpu"
         return device
 
@@ -38,7 +42,7 @@ class YoloModel:
         """
         Performs inference on a single image and returns annotations.
         """
-        print(f"Predicting for image: {image_path}")
+        print(f"Predicting for image: {image_path}", file=sys.stderr)
 
         results = self.model(image_path, verbose=False, device=self.device)
 
@@ -82,7 +86,8 @@ class YoloModel:
         img = cv2.imread(str(image_path))
         if img is None:
             print(
-                f"Warning: Could not read image size for {image_path}. Using default."
+                f"Warning: Could not read image size for {image_path}. Using default.",
+                file=sys.stderr,
             )
             return (1920, 1080)
         height, width, _ = img.shape

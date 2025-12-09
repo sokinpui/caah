@@ -127,11 +127,11 @@ class CVATApi:
             response.raise_for_status()
             token = response.json()["key"]
             self.session.headers.update({"Authorization": f"Token {token}"})
-            print("Successfully logged in to CVAT.")
+            print("Successfully logged in to CVAT.", file=sys.stderr)
         except requests.exceptions.RequestException as e:
-            print(f"Login failed: {e}")
+            print(f"Login failed: {e}", file=sys.stderr)
             if e.response is not None:
-                print(f"Response: {e.response.text}")
+                print(f"Response: {e.response.text}", file=sys.stderr)
             sys.exit(1)
 
     def _handle_error(self, response, message):
@@ -147,13 +147,13 @@ class CVATApi:
     def wait_for_job(self, rq_id):
         """Poll the status of an asynchronous job."""
         request_url = f"{self.api_url}/requests/{rq_id}"
-        print(f"Waiting for job {rq_id} to complete...")
+        print(f"Waiting for job {rq_id} to complete...", file=sys.stderr)
         while True:
             response = self.session.get(request_url)
             self._handle_error(response, f"Failed to get job status for {rq_id}")
             data = response.json()
             status = data.get("status")
-            print(f"Job {rq_id} status: {status}")
+            print(f"Job {rq_id} status: {status}", file=sys.stderr)
 
             if status == "finished":
                 return data
@@ -168,12 +168,12 @@ class CVATApi:
 
     def _download_file(self, url, output_path):
         """Download a file with streaming."""
-        print(f"Downloading from {url} to {output_path}...")
+        print(f"Downloading from {url} to {output_path}...", file=sys.stderr)
         with self.session.get(url, stream=True) as r:
             self._handle_error(r, "File download failed")
             with open(output_path, "wb") as f:
                 shutil.copyfileobj(r.raw, f)
-        print("Download complete.")
+        print("Download complete.", file=sys.stderr)
 
     # --- Project Operations ---
 
@@ -183,7 +183,10 @@ class CVATApi:
         response = self.session.post(url, json={"name": name})
         self._handle_error(response, f"Failed to create project '{name}'")
         project_data = response.json()
-        print(f"Successfully created project '{name}' with ID: {project_data['id']}")
+        print(
+            f"Successfully created project '{name}' with ID: {project_data['id']}",
+            file=sys.stderr,
+        )
         return project_data
 
     def list_projects(self):
@@ -199,7 +202,7 @@ class CVATApi:
         response = self.session.delete(url)
         if response.status_code != 204:
             self._handle_error(response, f"Failed to delete project {project_id}")
-        print(f"Project {project_id} deleted successfully.")
+        print(f"Project {project_id} deleted successfully.", file=sys.stderr)
 
     def backup_project(self, project_id, output_file):
         """Backup a project."""
@@ -239,9 +242,9 @@ class CVATApi:
         if response.status_code == 202:
             rq_id = response.json().get("rq_id")
             self.wait_for_job(rq_id)
-            print("Project import job finished.")
+            print("Project import job finished.", file=sys.stderr)
         else:
-            print("Project import started.")
+            print("Project import started.", file=sys.stderr)
 
     def export_project_dataset(
         self, project_id, output_file, format_name, save_images=False
@@ -287,9 +290,9 @@ class CVATApi:
         if response.status_code == 202:
             rq_id = response.json().get("rq_id")
             self.wait_for_job(rq_id)
-            print("Dataset import job finished.")
+            print("Dataset import job finished.", file=sys.stderr)
         else:
-            print("Dataset import started.")
+            print("Dataset import started.", file=sys.stderr)
 
     # # --- Task Operations ---
 
@@ -449,6 +452,11 @@ def setup_cvat_parser(parser):
     p_backup.add_argument(
         "-o", "--output-file", required=True, help="Path to save backup"
     )
+    p_backup.add_argument(
+        "--stdout",
+        action="store_true",
+        help="Suppress all messages except the final backup path to stdout.",
+    )
     p_import = project_subparsers.add_parser(
         "recreate", help="Recreate a project from backup"
     )
@@ -485,6 +493,11 @@ def setup_cvat_parser(parser):
         "--save-images",
         action="store_true",
         help="Include images in the export",
+    )
+    p_export_ds.add_argument(
+        "--stdout",
+        action="store_true",
+        help="Suppress all messages except the final dataset path to stdout.",
     )
 
     # # Task parser
@@ -566,6 +579,7 @@ def run_cvat(args):
                 api.delete_project(args.project_id)
             elif args.action == "backup":
                 api.backup_project(args.project_id, args.output_file)
+                print(args.output_file)
             elif args.action == "recreate":
                 api.import_project(args.input_file)
             elif args.action == "import_dataset":
@@ -576,6 +590,7 @@ def run_cvat(args):
                 api.export_project_dataset(
                     args.project_id, args.output_file, args.format, args.save_images
                 )
+                print(args.output_file)
         # elif args.resource == "task":
         #     if args.action == "create":
         #         api.create_task(args.name, args.project_id)

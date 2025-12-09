@@ -1,5 +1,6 @@
 import argparse
 import tempfile
+import sys
 import zipfile
 from pathlib import Path
 
@@ -14,7 +15,8 @@ def find_yaml_file(directory: Path) -> Path:
         raise FileNotFoundError(f"Could not find 'data.yaml' in {directory}")
     if len(yaml_files) > 1:
         print(
-            f"Warning: Found multiple 'data.yaml' files. Using the first one: {yaml_files[0]}"
+            f"Warning: Found multiple 'data.yaml' files. Using the first one: {yaml_files[0]}",
+            file=sys.stderr,
         )
     return yaml_files[0]
 
@@ -30,12 +32,12 @@ def train_model(
     """
     Initializes and trains the YOLO model.
     """
-    print("--- Starting Training ---")
+    print("--- Starting Training ---", file=sys.stderr)
     from ultralytics import YOLO
 
-    print(f"Data: {data_yaml_path}")
-    print(f"Model: {model_size}")
-    print(f"Epochs: {epochs}")
+    print(f"Data: {data_yaml_path}", file=sys.stderr)
+    print(f"Model: {model_size}", file=sys.stderr)
+    print(f"Epochs: {epochs}", file=sys.stderr)
 
     model_name = f"{model_size}.pt"
     model = YOLO(model_name)
@@ -50,8 +52,9 @@ def train_model(
         save=True,
     )
 
-    print("--- Training Complete ---")
-    print(f"Best model saved at: {results.save_dir}/weights/best.pt")
+    print("--- Training Complete ---", file=sys.stderr)
+    best_model_path = f"{results.save_dir}/weights/best.pt"
+    print(best_model_path)
 
 
 def process_dataset_and_train(
@@ -73,7 +76,9 @@ def process_dataset_and_train(
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
-        print(f"Extracting dataset to temporary directory: {tmpdir_path}")
+        print(
+            f"Extracting dataset to temporary directory: {tmpdir_path}", file=sys.stderr
+        )
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(tmpdir_path)
 
@@ -122,6 +127,11 @@ def add_train_arguments(parser):
         default="0",
         help="Device to use: '0' for GPU, 'cpu' for CPU. Default: 0",
     )
+    parser.add_argument(
+        "--stdout",
+        action="store_true",
+        help="Suppress all messages except the final model path to stdout.",
+    )
 
 
 def run_train(args):
@@ -138,9 +148,9 @@ def run_train(args):
             device=args.device,
         )
     except FileNotFoundError as e:
-        print(f"Error: {e}")
+        print(f"Error: {e}", file=sys.stderr)
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"An unexpected error occurred: {e}", file=sys.stderr)
 
 
 def main():

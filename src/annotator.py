@@ -76,7 +76,7 @@ class YoloFormatter(AnnotationFormatter):
         output_filename = image_path.with_suffix(".txt").name
         output_path = self.output_dir / output_filename
         output_path.write_text("\n".join(lines))
-        print(f"Saved YOLO annotations to {output_path}")
+        print(f"Saved YOLO annotations to {output_path}", file=sys.stderr)
 
 
 class CvatXmlFormatter(AnnotationFormatter):
@@ -154,7 +154,7 @@ class CvatXmlFormatter(AnnotationFormatter):
 </annotations>"""
         output_path = self.output_dir / "annotations.xml"
         output_path.write_text(xml_output)
-        print(f"Saved CVAT annotations to {output_path}")
+        print(f"Saved CVAT annotations to {output_path}", file=sys.stderr)
 
 
 def get_formatter(output_format: str) -> AnnotationFormatter:
@@ -188,7 +188,7 @@ class AutoAnnotator:
         )
 
         if not image_paths:
-            print(f"No images found in {images_dir}")
+            print(f"No images found in {images_dir}", file=sys.stderr)
             return
 
         formatter.initialize(output_dir, image_paths, labels=self.model.labels)
@@ -245,6 +245,11 @@ def add_annotate_arguments(parser):
         choices=["gpu", "cpu"],
         help="Device to run the model on (gpu or cpu).",
     )
+    parser.add_argument(
+        "--stdout",
+        action="store_true",
+        help="Suppress all messages except the final output path to stdout.",
+    )
 
 
 def run_annotate(args):
@@ -253,7 +258,7 @@ def run_annotate(args):
     """
     images_path = Path(args.images)
     if not images_path.is_dir():
-        print(f"Error: Image directory not found at {args.images}")
+        print(f"Error: Image directory not found at {args.images}", file=sys.stderr)
         return
 
     try:
@@ -262,10 +267,11 @@ def run_annotate(args):
         annotator.process_images(
             images_path, Path(args.output), formatter, copy_images=args.copy
         )
+        print(args.output)
     except (FileNotFoundError, UnsupportedFormatException) as e:
-        print(f"Error: {e}")
+        print(f"Error: {e}", file=sys.stderr)
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"An unexpected error occurred: {e}", file=sys.stderr)
 
 
 def main():

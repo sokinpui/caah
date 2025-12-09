@@ -1,5 +1,6 @@
 import argparse
 import sys
+import os
 import argcomplete
 
 from annotator import add_annotate_arguments, run_annotate
@@ -40,6 +41,9 @@ def main():
     argcomplete.autocomplete(parser)
 
     args = parser.parse_args()
+    if hasattr(args, "stdout") and args.stdout:
+        sys.stderr = open(os.devnull, "w")
+
     if hasattr(args, "func"):
         args.func(args)
     else:
