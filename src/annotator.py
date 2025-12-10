@@ -40,6 +40,13 @@ def add_annotate_arguments(parser):
         default=0.25,
         help="Confidence threshold for predictions. Default: 0.25",
     )
+    parser.add_argument(
+        "--no-mark-auto",
+        dest="mark_auto",
+        action="store_false",
+        help="Disable appending ' (auto)' to class names for generated annotations.",
+    )
+    parser.set_defaults(mark_auto=True)
 
 
 def _xyxy_to_yolo(box, img_w, img_h):
@@ -67,6 +74,38 @@ def _xyxy_to_yolo(box, img_w, img_h):
     h = max(0.0, min(1.0, h))
 
     return x_center, y_center, w, h
+
+
+def _get_target_label_path(image_path: Path):
+    """
+    Determines the target path for the label file.
+    Returns (path, exists_flag).
+    Priority:
+    1. Existing file in same directory.
+    2. Existing file in 'labels' directory (mapped from 'images').
+    3. New file in 'labels' directory (if parent exists).
+    4. New file in same directory.
+    """
+    # 1. Check same directory
+    same_dir = image_path.with_suffix(".txt")
+    if same_dir.exists():
+        return same_dir, True
+
+    # 2. Check standard YOLO folder structure (images -> labels)
+    parts = list(image_path.parts)
+    # Iterate parts to find "images" (could be multiple, use the last one that makes sense)
+    # A simple approach is finding the last occurrence of "images"
+    if "images" in parts:
+        idx = len(parts) - 1 - parts[::-1].index("images")
+        parts[idx] = "labels"
+        yolo_path = Path(*parts).with_suffix(".txt")
+
+        if yolo_path.exists():
+            return yolo_path, True
+        if yolo_path.parent.exists():
+            return yolo_path, False
+
+    return same_dir, False
 
 
 def run_annotate(args):
@@ -113,45 +152,11 @@ def run_annotate(args):
 
         print(f"Found {len(image_files)} images. Starting annotation...", file=sys.stderr)
 
-        count = 0
-        for img_path in image_files:
-            # Get image dimensions
-            img_w, img_h = model.get_image_size(img_path)
-            
-            # Predict
-            predictions = model.predict(img_path)
-            
-            # Prepare label content
-            label_lines = []
-            for pred in predictions:
-                class_id = pred["class_id"]
-                box = pred["box"]
-                
-                xc, yc, w, h = _xyxy_to_yolo(box, img_w, img_h)
-                label_lines.append(f"{class_id} {xc:.6f} {yc:.6f} {w:.6f} {h:.6f}")
-
-            # Write label file (same name as image, but .txt)
-            label_path = img_path.with_suffix(".txt")
-            with open(label_path, "w") as f:
-                f.write("\n".join(label_lines))
-            
-            count += 1
-            if count % 10 == 0:
-                print(f"Processed {count}/{len(image_files)} images...", end="\r", file=sys.stderr)
-
-        print(f"\nAnnotated {count} images.", file=sys.stderr)
-
-        # Update or Create data.yaml to match the model's classes
-        # This is crucial because the class_ids in .txt files correspond to this model
-        print("Updating data.yaml with model classes...", file=sys.stderr)
-        
-        # Try to find existing data.yaml to preserve paths
+        # Handle class names and mapping
         existing_yaml = list(dataset_dir.rglob("data.yaml"))
-        yaml_content = {
-            "train": "images/train", # Default fallback
-            "val": "images/val",     # Default fallback
-        }
-
+        yaml_content = {"train": "images/train", "val": "images/val", "names": {}}
+        
+        # Load existing names if available
         if existing_yaml:
             try:
                 with open(existing_yaml[0], "r") as f:
@@ -164,10 +169,77 @@ def run_annotate(args):
         else:
             yaml_path = dataset_dir / "data.yaml"
 
-        # Overwrite names with model names to ensure consistency
-        yaml_content["names"] = model.model.names
-        # Ensure nc (number of classes) matches
-        yaml_content["nc"] = len(model.model.names)
+        # Ensure names is a dict or list, convert to list for processing
+        current_names = yaml_content.get("names", [])
+        if isinstance(current_names, dict):
+            # handle {0: 'a', 1: 'b'}
+            current_names = [current_names[i] for i in sorted(current_names.keys())]
+        
+        # If dataset was empty of names, use model names
+        if not current_names:
+            current_names = list(model.model.names.values())
+
+        # Determine target class IDs
+        model_names = model.model.names # dict {0: 'name'}
+        
+        processed_count = 0
+
+        for img_path in image_files:
+            # Determine label path
+            label_path, exists = _get_target_label_path(img_path)
+
+            # Get image dimensions
+            img_w, img_h = model.get_image_size(img_path)
+            
+            # Predict
+            predictions = model.predict(img_path)
+            
+            # Prepare label content
+            label_lines = []
+            for pred in predictions:
+                class_id = pred["class_id"]
+                class_name = model_names[class_id]
+                box = pred["box"]
+                
+                target_class_id = class_id
+
+                # Map to _auto class if requested
+                if args.mark_auto:
+                    auto_name = f"{class_name} (auto)"
+                    if auto_name not in current_names:
+                        current_names.append(auto_name)
+                    target_class_id = current_names.index(auto_name)
+                else:
+                    # Ensure class exists in current_names
+                    if class_name not in current_names:
+                        current_names.append(class_name)
+                    target_class_id = current_names.index(class_name)
+
+                xc, yc, w, h = _xyxy_to_yolo(box, img_w, img_h)
+                label_lines.append(f"{target_class_id} {xc:.6f} {yc:.6f} {w:.6f} {h:.6f}")
+
+            # Prepare final content (Append to existing if present)
+            final_lines = []
+            if exists:
+                with open(label_path, "r") as f:
+                    # Read existing lines and strip whitespace
+                    final_lines = [l.strip() for l in f.readlines() if l.strip()]
+            
+            final_lines.extend(label_lines)
+
+            with open(label_path, "w") as f:
+                f.write("\n".join(final_lines))
+            
+            processed_count += 1
+            if processed_count % 10 == 0:
+                print(f"Processed {processed_count}/{len(image_files)}...", end="\r", file=sys.stderr)
+
+        print(f"\nProcessed {processed_count} images.", file=sys.stderr)
+
+        # Save updated data.yaml
+        print("Updating data.yaml...", file=sys.stderr)
+        yaml_content["names"] = current_names
+        yaml_content["nc"] = len(current_names)
 
         with open(yaml_path, "w") as f:
             yaml.dump(yaml_content, f, sort_keys=False)
