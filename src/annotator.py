@@ -172,6 +172,7 @@ class AutoAnnotator:
     """
     Orchestrates the auto-annotation process.
     """
+
     def __init__(self, model_path: str, device: str = "gpu"):
         self.model = YoloModel(model_path, device=device)
 
@@ -182,7 +183,7 @@ class AutoAnnotator:
         formatter: AnnotationFormatter,
         copy_images: bool = False,
     ):
-        image_extensions = [".jpg", ".jpeg", ".png"]
+        image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
         image_paths = sorted(
             [p for p in images_dir.iterdir() if p.suffix.lower() in image_extensions]
         )
@@ -226,7 +227,8 @@ def add_annotate_arguments(parser):
         help="Path to the directory to save annotations.",
     )
     parser.add_argument(
-        "--output-format",
+        "-f",
+        "--format",
         type=str,
         default="cvat",
         choices=["cvat", "yolo"],
@@ -245,11 +247,6 @@ def add_annotate_arguments(parser):
         choices=["gpu", "cpu"],
         help="Device to run the model on (gpu or cpu).",
     )
-    parser.add_argument(
-        "--stdout",
-        action="store_true",
-        help="Suppress all messages except the final output path to stdout.",
-    )
 
 
 def run_annotate(args):
@@ -263,7 +260,7 @@ def run_annotate(args):
 
     try:
         annotator = AutoAnnotator(args.model, device=args.device)
-        formatter = get_formatter(args.output_format)
+        formatter = get_formatter(args.format)
         annotator.process_images(
             images_path, Path(args.output), formatter, copy_images=args.copy
         )

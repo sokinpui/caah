@@ -31,7 +31,10 @@ def add_split_arguments(parser):
         help="Path to the input dataset zip file (YOLO 1.1 format).",
     )
     parser.add_argument(
-        "-o", "--output", required=True, help="Path for the output directory."
+        "-o",
+        "--output",
+        required=True,
+        help="Path for the output dataset zip file.",
     )
     parser.add_argument(
         "-s",
@@ -39,12 +42,6 @@ def add_split_arguments(parser):
         required=True,
         type=str,
         help="Train:Val split ratio (e.g., '80:20').",
-    )
-    parser.add_argument("--zip", action="store_true", help="Zip the output directory.")
-    parser.add_argument(
-        "--stdout",
-        action="store_true",
-        help="Suppress all messages except the final output path to stdout.",
     )
 
 
@@ -74,18 +71,12 @@ def _find_class_names(extracted_path: Path) -> list[str]:
 def run_split(args):
     """Splits a YOLO dataset into training and validation sets."""
     dataset_zip = Path(args.dataset)
-    output_path = Path(args.output)
+    output_zip_path = Path(args.output)
 
     if not dataset_zip.is_file() or dataset_zip.suffix.lower() != ".zip":
         print(
             f"Error: --dataset must be a valid zip file. Got: {dataset_zip}",
             file=sys.stderr,
-        )
-        sys.exit(1)
-
-    if output_path.exists() and any(output_path.iterdir()):
-        print(
-            f"Error: Output directory '{output_path}' is not empty.", file=sys.stderr
         )
         sys.exit(1)
 
@@ -106,23 +97,28 @@ def run_split(args):
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
+        extract_dir = tmpdir_path / "input"
+        extract_dir.mkdir()
+        build_dir = tmpdir_path / "output"
+        build_dir.mkdir()
+
         print(
             f"Extracting {dataset_zip.name} to a temporary directory...",
             file=sys.stderr,
         )
         with zipfile.ZipFile(dataset_zip, "r") as zip_ref:
-            zip_ref.extractall(tmpdir_path)
+            zip_ref.extractall(extract_dir)
 
-        image_extensions = [".jpg", ".jpeg", ".png", ".bmp"]
+        image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
         image_paths = [
-            p for p in tmpdir_path.rglob("*") if p.suffix.lower() in image_extensions
+            p for p in extract_dir.rglob("*") if p.suffix.lower() in image_extensions
         ]
 
         if not image_paths:
             print("Error: No images found in the dataset.", file=sys.stderr)
             sys.exit(1)
 
-        class_names = _find_class_names(tmpdir_path)
+        class_names = _find_class_names(extract_dir)
         print(f"Found {len(class_names)} classes: {class_names}", file=sys.stderr)
 
         random.shuffle(image_paths)
@@ -136,10 +132,10 @@ def run_split(args):
         )
 
         # Create output structure
-        train_img_dir = output_path / "images" / "train"
-        val_img_dir = output_path / "images" / "val"
-        train_lbl_dir = output_path / "labels" / "train"
-        val_lbl_dir = output_path / "labels" / "val"
+        train_img_dir = build_dir / "images" / "train"
+        val_img_dir = build_dir / "images" / "val"
+        train_lbl_dir = build_dir / "labels" / "train"
+        val_lbl_dir = build_dir / "labels" / "val"
 
         for d in [train_img_dir, val_img_dir, train_lbl_dir, val_lbl_dir]:
             d.mkdir(parents=True, exist_ok=True)
@@ -164,24 +160,22 @@ def run_split(args):
 
         # Create data.yaml
         yaml_data = {
-            "path": str(output_path.resolve()),
             "train": "images/train",
             "val": "images/val",
             "names": {i: name for i, name in enumerate(class_names)},
         }
-        yaml_path = output_path / "data.yaml"
+        yaml_path = build_dir / "data.yaml"
         with open(yaml_path, "w") as f:
             yaml.dump(yaml_data, f, sort_keys=False)
 
         print(f"Created {yaml_path}", file=sys.stderr)
 
-    final_path = output_path
-    if args.zip:
-        print(f"Zipping output directory to {output_path}.zip...", file=sys.stderr)
-        zip_output_path = shutil.make_archive(
-            base_name=str(output_path), format="zip", root_dir=str(output_path)
+        print(f"Zipping output directory to {output_zip_path}...", file=sys.stderr)
+        zip_output_path_str = shutil.make_archive(
+            base_name=str(output_zip_path.with_suffix("")),
+            format="zip",
+            root_dir=str(build_dir),
         )
-        shutil.rmtree(output_path)  # Clean up the directory after zipping
-        final_path = Path(zip_output_path)
+        final_path = Path(zip_output_path_str)
 
     print(final_path)

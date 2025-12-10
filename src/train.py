@@ -127,11 +127,6 @@ def add_train_arguments(parser):
         default="0",
         help="Device to use: '0' for GPU, 'cpu' for CPU. Default: 0",
     )
-    parser.add_argument(
-        "--stdout",
-        action="store_true",
-        help="Suppress all messages except the final model path to stdout.",
-    )
 
 
 def run_train(args):

@@ -54,11 +54,6 @@ def add_convert_arguments(parser):
             "For a full list, refer to Datumaro documentation."
         ),
     )
-    parser.add_argument(
-        "--stdout",
-        action="store_true",
-        help="Suppress all messages except the final file path to stdout.",
-    )
 
 
 def run_convert(args):

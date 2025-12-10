@@ -18,6 +18,11 @@ def main():
     subparsers = parser.add_subparsers(
         dest="command", required=True, help="Available commands"
     )
+    parser.add_argument(
+        "--stdout",
+        action="store_true",
+        help="Suppress all messages except the final output path to stdout.",
+    )
 
     annotate_parser = subparsers.add_parser("annotate", help="Run auto-annotation.")
     add_annotate_arguments(annotate_parser)
@@ -45,8 +50,7 @@ def main():
     argcomplete.autocomplete(parser)
 
     args = parser.parse_args()
-    if hasattr(args, "stdout") and args.stdout:
-        sys.stderr = open(os.devnull, "w")
+    sys.stderr = open(os.devnull, "w") if args.stdout else sys.stderr
 
     if hasattr(args, "func"):
         args.func(args)

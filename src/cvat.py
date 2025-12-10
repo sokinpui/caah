@@ -247,7 +247,7 @@ class CVATApi:
             print("Project import started.", file=sys.stderr)
 
     def export_project_dataset(
-        self, project_id, output_file, format_name, save_images=False
+        self, project_id, output_file, format_name, save_images=True
     ):
         """Export a project's dataset."""
         url = f"{self.api_url}/projects/{project_id}/dataset/export"
@@ -452,11 +452,6 @@ def setup_cvat_parser(parser):
     p_backup.add_argument(
         "-o", "--output-file", required=True, help="Path to save backup"
     )
-    p_backup.add_argument(
-        "--stdout",
-        action="store_true",
-        help="Suppress all messages except the final backup path to stdout.",
-    )
     p_import = project_subparsers.add_parser(
         "recreate", help="Recreate a project from backup"
     )
@@ -487,17 +482,12 @@ def setup_cvat_parser(parser):
     p_export_ds.add_argument(
         "-o", "--output-file", required=True, help="Path to save dataset"
     )
-    p_export_ds.add_argument("-f", "--format", required=True, help="Dataset format")
+    p_export_ds.add_argument("-f", "--format", default="YOLO 1.1", help="Dataset format")
     p_export_ds.add_argument(
-        "-s",
-        "--save-images",
-        action="store_true",
-        help="Include images in the export",
-    )
-    p_export_ds.add_argument(
-        "--stdout",
-        action="store_true",
-        help="Suppress all messages except the final dataset path to stdout.",
+        "--no-images",
+        dest="save_images",
+        action="store_false",
+        help="Do not include images in the export. Images are included by default.",
     )
 
     # # Task parser
