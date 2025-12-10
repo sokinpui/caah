@@ -1,27 +1,91 @@
 #!/bin/bash
 
+set -e
+
 caah-cmd() {
   caah --stdout "$@"
 }
 
-dataset=$(caah-cmd cvat project export_dataset -u 7 -o YOLO-dataset.zip)
+caah cvat project list
 
-echo $dataset
+# Download dataset from CVAT project
+echo "Input the Id of the CVAT project to export dataset from: "
+read -r project_id
 
-train_dataset=$(caah-cmd data split -d $dataset -o train-datatset.zip -s 80:20)
+echo ""
 
-echo $train_dataset
+echo "Input the name for the exported dataset zip ( e.g., exported_dataset.zip): "
+read -r export_dataset
 
-caah-cmd train -d $train_dataset -m yolo11n --epochs 1 --device cpu
+echo ""
+echo "Exporting dataset from CVAT project ID $project_id to $export_dataset..."
+dataset=$(caah-cmd cvat project export_dataset -u "$project_id" -o "$export_dataset")
 
-echo "Please enter the path to the trained model file (.pt): "
-read model_path
+echo ""
+echo "Dataset exported to $dataset"
 
-echo "Please enter the Path to the dataset ( YOLO 1.1 format ) to annotate: "
-read images_set
+# preprocess dataset for training
+echo ""
+echo "Input the ratio for train and val split (e.g., 80:20): "
+read -r split_ratio
 
-result=$(caah-cmd annotate -m $model_path -d $images_set -o annotated_results.zip --device cpu)
+echo ""
+echo "Splitting dataset with ratio $split_ratio..."
+train_dataset=$(caah-cmd data split -d "$dataset" -o train-datatset.zip -s "$split_ratio")
 
-echo $result
+echo "Train dataset created at $train_dataset"
 
-caah cvat project import_dataset -i $result -u 7 -f yolo
+# train model
+echo ""
+echo "Input the Model version/size (e.g., yolo11n, yolo11s, yolov8m): "
+read -r model_version
+
+echo ""
+echo "Input the number of epochs for training: "
+read -r epochs
+
+echo ""
+echo "Input the device to use for training (cpu, gpu): "
+read -r device
+
+echo ""
+echo "Input the Batch size for training: "
+read -r batch_size
+
+echo ""
+echo "Input the image size for training (e.g., 640): "
+read -r image_size
+
+echo "Training model $model_version on dataset $train_dataset..."
+caah-cmd train -d "$train_dataset" -m "$model_version" --epochs "$epochs" --device "$device" -b "$batch_size" --imgsz "$image_size"
+
+# Auto annotation
+echo ""
+echo "Automatic annotation of new dataset"
+echo "Input the path to the trained model weights (e.g., runs/train/exp/weights/best.pt): "
+read -r model_path
+
+echo ""
+echo "Input the path the dataset to be annotated: "
+read -r images_set
+
+echo ""
+echo "Input the device to use for annotation (cpu, gpu): "
+read -r device
+
+echo ""
+echo "Input the annotated dataset zip (e.g., annotated_results.zip): "
+read -r annotated_results
+
+echo ""
+echo "Inpu the confidence threshold for annotation (e.g., 0.25): "
+read -r conf_threshold
+
+echo ""
+echo "Annotating dataset at $images_set using model at $model_path..."
+result=$(caah-cmd annotate -m "$model_path" -d "$images_set" -o "$annotated_results" --device "$device" --config "$conf_threshold")
+
+# Import annotated dataset back to CVAT
+echo ""
+echo "Importing annotated dataset back to CVAT project ID $project_id..."
+caah cvat project import_dataset -i "$result" -u "$project_id" -f yolo
