@@ -24,15 +24,15 @@ def add_convert_arguments(parser):
         dest="from_format",
         required=True,
         help=(
-            "Input dataset format. Common formats include: "
-            "\n- CVAT"
-            "\n- YOLO"
-            "\n- COCO (image_info, instances, person_keypoints, captions, labels)"
-            "\n- PASCAL VOC (classification, detection, segmentation, action_classification, person_layout)"
-            "\n- TF Detection API"
-            "\n- WIDER Face"
-            "\n- ImageNet, LabelMe, Roboflow, Cityscapes"
-            "\n- MOT sequences, MOTS PNG, CamVid, ICDAR13/15, Market-1501, LFW. "
+            "Input dataset format. Common format codes include: "
+            "\n- `cvat`"
+            "\n- `yolo`"
+            "\n- `coco`"
+            "\n- `voc` (PASCAL VOC)"
+            "\n- `label_me`"
+            "\n- `tf_detection_api`"
+            "\n- `cityscapes`"
+            "\n- `imagenet`"
             "For a full list, refer to Datumaro documentation."
         ),
     )
@@ -42,15 +42,15 @@ def add_convert_arguments(parser):
         dest="to_format",
         required=True,
         help=(
-            "Output dataset format. Common formats include: "
-            "\n- CVAT"
-            "\n- YOLO"
-            "\n- COCO (image_info, instances, person_keypoints, captions, labels)"
-            "\n- PASCAL VOC (classification, detection, segmentation, action_classification, person_layout)"
-            "\n- TF Detection API"
-            "\n- WIDER Face"
-            "\n- ImageNet, LabelMe, Roboflow, Cityscapes"
-            "\n- MOT sequences, MOTS PNG, CamVid, ICDAR13/15, Market-1501, LFW. "
+            "Output dataset format. Common format codes include: "
+            "\n- `cvat`"
+            "\n- `yolo`"
+            "\n- `coco`"
+            "\n- `voc` (PASCAL VOC)"
+            "\n- `label_me`"
+            "\n- `tf_detection_api`"
+            "\n- `cityscapes`"
+            "\n- `imagenet`"
             "For a full list, refer to Datumaro documentation."
         ),
     )
