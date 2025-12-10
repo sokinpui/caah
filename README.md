@@ -23,3 +23,19 @@ CVAT_URL=http://localhost:8080
 CVAT_USERNAME=your_username
 CVAT_PASSWORD=your_password
 ```
+
+# Usage
+
+Run this script to use
+
+```bash
+./run.sh
+```
+
+The script will:
+
+1. download dataset from CVAT project
+2. preprocess dataset for training, spliting into train and val sets
+3. train a model
+4. automate annotation of a dataset
+5. upload the result back to the same CVAT project
