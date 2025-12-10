@@ -71,6 +71,7 @@ class YoloModel:
             annotations.append(
                 {
                     "label": label,
+                    "class_id": class_id,
                     "box": box_coords,
                 }
             )

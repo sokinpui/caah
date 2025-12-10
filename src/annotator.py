@@ -1,307 +1,183 @@
 import argparse
-import shutil
 import sys
-from abc import ABC, abstractmethod
-from datetime import datetime
-from pathlib import Path
+import shutil
 import tempfile
+import zipfile
+import yaml
+from pathlib import Path
 
 from yolo_model import YoloModel
 
 
-class UnsupportedFormatException(Exception):
-    pass
-
-
-class AnnotationFormatter(ABC):
-    """
-    Abstract base class for annotation formatters.
-    """
-
-    def __init__(self):
-        self.output_dir = None
-
-    def initialize(
-        self, output_dir: Path, image_paths: list[Path], labels: dict = None
-    ):
-        self.output_dir = output_dir
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.labels = labels if labels else {}
-
-    @abstractmethod
-    def save_per_image(
-        self, image_path: Path, annotations: list[dict], image_size: tuple[int, int]
-    ):
-        pass
-
-    def finalize(self):
-        pass
-
-
-class YoloFormatter(AnnotationFormatter):
-    """
-    Formats annotations in YOLO format.
-    Saves one .txt file per image.
-    """
-
-    def initialize(
-        self, output_dir: Path, image_paths: list[Path], labels: dict = None
-    ):
-        super().initialize(output_dir, image_paths, labels)
-        self.label_to_id = {name: i for i, name in self.labels.items()}
-
-    def save_per_image(
-        self, image_path: Path, annotations: list[dict], image_size: tuple[int, int]
-    ):
-        # In a real scenario, you would need a mapping from label names to class indices
-        image_width, image_height = image_size
-
-        lines = []
-        for ann in annotations:
-            label = ann.get("label")
-            if label not in self.label_to_id:
-                continue
-
-            class_id = self.label_to_id[label]
-            x_min, y_min, x_max, y_max = ann.get("box", [0, 0, 0, 0])
-
-            x_center = (x_min + x_max) / 2 / image_width
-            y_center = (y_min + y_max) / 2 / image_height
-            box_width = (x_max - x_min) / image_width
-            box_height = (y_max - y_min) / image_height
-
-            lines.append(
-                f"{class_id} {x_center:.6f} {y_center:.6f} {box_width:.6f} {box_height:.6f}"
-            )
-
-        output_filename = image_path.with_suffix(".txt").name
-        output_path = self.output_dir / output_filename
-        output_path.write_text("\n".join(lines))
-        print(f"Saved YOLO annotations to {output_path}", file=sys.stderr)
-
-
-class CvatXmlFormatter(AnnotationFormatter):
-    """
-    Formats annotations in CVAT XML format.
-    Saves a single annotations.xml file.
-    """
-
-    def initialize(
-        self, output_dir: Path, image_paths: list[Path], labels: dict = None
-    ):
-        super().initialize(output_dir, image_paths, labels)
-        self.image_annotations = []
-        self.image_paths = image_paths
-
-    def save_per_image(
-        self, image_path: Path, annotations: list[dict], image_size: tuple[int, int]
-    ):
-        image_id = self.image_paths.index(image_path)
-        width, height = image_size
-
-        box_strings = []
-        for ann in annotations:
-            label = ann.get("label")
-            xtl, ytl, xbr, ybr = ann.get("box", [0, 0, 0, 0])
-            box_strings.append(
-                f'    <box label="{label}" occluded="0" source="auto" xtl="{xtl}" ytl="{ytl}" xbr="{xbr}" ybr="{ybr}" z_order="0"></box>'
-            )
-
-        boxes = "\n".join(box_strings)
-        self.image_annotations.append(
-            f"""  <image id="{image_id}" name="{image_path.name}" width="{width}" height="{height}">
-{boxes}
-  </image>"""
-        )
-
-    def finalize(self):
-        all_annotations = "\n".join(self.image_annotations)
-        num_images = len(self.image_paths)
-
-        label_strings = []
-        # A simple color generator
-        colors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff"]
-        if self.labels:
-            # self.labels is dict[int, str]
-            for i, label_name in self.labels.items():
-                color = colors[i % len(colors)]
-                label_strings.append(
-                    f"        <label><name>{label_name}</name><color>{color}</color><attributes></attributes></label>"
-                )
-        labels_xml = "\n".join(label_strings)
-
-        now_iso = datetime.utcnow().isoformat()
-
-        xml_output = f"""<?xml version="1.0" encoding="utf-8"?>
-<annotations>
-  <version>1.1</version>
-  <meta>
-    <task>
-      <id></id>
-      <name>Auto-annotated Task</name>
-      <size>{num_images}</size>
-      <mode>annotation</mode>
-      <overlapping>0</overlapping>
-      <bugtracker></bugtracker>
-      <created>{now_iso}</created>
-      <updated>{now_iso}</updated>
-      <labels>
-{labels_xml}
-      </labels>
-    </task>
-    <dumped>{now_iso}</dumped>
-  </meta>
-{all_annotations}
-</annotations>"""
-        output_path = self.output_dir / "annotations.xml"
-        output_path.write_text(xml_output)
-        print(f"Saved CVAT annotations to {output_path}", file=sys.stderr)
-
-
-def get_formatter(output_format: str) -> AnnotationFormatter:
-    format_map = {
-        "cvat": CvatXmlFormatter,
-        "yolo": YoloFormatter,
-    }
-    formatter_class = format_map.get(output_format.lower())
-    if not formatter_class:
-        raise UnsupportedFormatException(f"Unsupported output format: {output_format}")
-    return formatter_class()
-
-
-class AutoAnnotator:
-    """
-    Orchestrates the auto-annotation process.
-    """
-
-    def __init__(self, model_path: str, device: str = "gpu"):
-        self.model = YoloModel(model_path, device=device)
-
-    def process_images(
-        self,
-        images_dir: Path,
-        output_dir: Path,
-        formatter: AnnotationFormatter,
-        copy_images: bool = False,
-    ):
-        image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
-        image_paths = sorted(
-            [p for p in images_dir.iterdir() if p.suffix.lower() in image_extensions]
-        )
-
-        if not image_paths:
-            print(f"No images found in {images_dir}", file=sys.stderr)
-            return
-
-        formatter.initialize(output_dir, image_paths, labels=self.model.labels)
-
-        for image_path in image_paths:
-            if copy_images:
-                shutil.copy(image_path, output_dir)
-
-            annotations = self.model.predict(image_path)
-            image_size = self.model.get_image_size(image_path)
-            formatter.save_per_image(image_path, annotations, image_size)
-
-        formatter.finalize()
-
-
 def add_annotate_arguments(parser):
-    """
-    Adds annotation-specific arguments to the parser.
-    """
+    """Adds arguments for the annotate command."""
     parser.add_argument(
-        "-m", "--model", type=str, required=True, help="Path to the trained model."
+        "-m",
+        "--model",
+        required=True,
+        help="Path to the YOLO model file (.pt).",
     )
     parser.add_argument(
-        "-i",
-        "--images",
-        type=str,
+        "-d",
+        "--dataset",
         required=True,
-        help="Path to the directory containing images.",
+        help="Path to the input dataset zip file (YOLO 1.1 format).",
     )
     parser.add_argument(
         "-o",
         "--output",
-        type=str,
         required=True,
-        help="Path to the output zip file for annotations.",
-    )
-    parser.add_argument(
-        "-f",
-        "--format",
-        type=str,
-        default="cvat",
-        choices=["cvat", "yolo"],
-        help="Format for the output annotations.",
-    )
-    parser.add_argument(
-        "-c",
-        "--copy",
-        action="store_true",
-        help="Copy original images to the output directory.",
+        help="Path for the output dataset zip file.",
     )
     parser.add_argument(
         "--device",
-        type=str,
-        default="gpu",
-        choices=["gpu", "cpu"],
-        help="Device to run the model on (gpu or cpu).",
+        default="cpu",
+        help="Device to run inference on (cpu, gpu). Default: cpu",
     )
+    parser.add_argument(
+        "--conf",
+        type=float,
+        default=0.25,
+        help="Confidence threshold for predictions. Default: 0.25",
+    )
+
+
+def _xyxy_to_yolo(box, img_w, img_h):
+    """
+    Converts bounding box from [x1, y1, x2, y2] to [x_center, y_center, w, h] normalized.
+    """
+    x1, y1, x2, y2 = box
+    
+    # Calculate center and width/height
+    w = x2 - x1
+    h = y2 - y1
+    x_center = x1 + (w / 2)
+    y_center = y1 + (h / 2)
+
+    # Normalize
+    x_center /= img_w
+    y_center /= img_h
+    w /= img_w
+    h /= img_h
+
+    # Clip values to ensure they are within [0, 1]
+    x_center = max(0.0, min(1.0, x_center))
+    y_center = max(0.0, min(1.0, y_center))
+    w = max(0.0, min(1.0, w))
+    h = max(0.0, min(1.0, h))
+
+    return x_center, y_center, w, h
 
 
 def run_annotate(args):
     """
-    Runs the annotation process with parsed arguments.
+    Main execution flow for auto-annotation.
     """
-    images_path = Path(args.images)
-    if not images_path.is_dir():
-        print(f"Error: Image directory not found at {args.images}", file=sys.stderr)
-        return
+    model_path = Path(args.model)
+    input_zip = Path(args.dataset)
+    output_zip = Path(args.output)
 
-    output_zip_path = Path(args.output)
-    if output_zip_path.suffix.lower() != ".zip":
-        print(
-            f"Error: Output path must be a .zip file. Got: {args.output}",
-            file=sys.stderr,
-        )
-        return
+    if not model_path.exists():
+        print(f"Error: Model file not found at {model_path}", file=sys.stderr)
+        sys.exit(1)
 
+    if not input_zip.exists():
+        print(f"Error: Input dataset not found at {input_zip}", file=sys.stderr)
+        sys.exit(1)
+
+    # Initialize model
     try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir_path = Path(tmpdir)
-
-            annotator = AutoAnnotator(args.model, device=args.device)
-            formatter = get_formatter(args.format)
-            annotator.process_images(
-                images_path, tmpdir_path, formatter, copy_images=args.copy
-            )
-
-            shutil.make_archive(
-                base_name=str(output_zip_path.with_suffix("")),
-                format="zip",
-                root_dir=str(tmpdir_path),
-            )
-        print(output_zip_path)
-    except (FileNotFoundError, UnsupportedFormatException) as e:
-        print(f"Error: {e}", file=sys.stderr)
+        model = YoloModel(str(model_path), device=args.device)
     except Exception as e:
-        print(f"An unexpected error occurred: {e}", file=sys.stderr)
+        print(f"Error loading model: {e}", file=sys.stderr)
+        sys.exit(1)
 
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        dataset_dir = tmpdir_path / "dataset"
+        dataset_dir.mkdir()
 
-def main():
-    """
-    Main function to run the auto-annotation process.
-    It parses command-line arguments, initializes the annotator and formatter,
-    and processes the images.
-    """
-    parser = argparse.ArgumentParser(
-        description="Auto-annotate images using a trained model."
-    )
-    add_annotate_arguments(parser)
-    args = parser.parse_args()
-    run_annotate(args)
+        print(f"Extracting {input_zip.name}...", file=sys.stderr)
+        with zipfile.ZipFile(input_zip, "r") as zip_ref:
+            zip_ref.extractall(dataset_dir)
 
+        # Find images
+        image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+        image_files = [
+            p for p in dataset_dir.rglob("*") if p.suffix.lower() in image_extensions
+        ]
 
-if __name__ == "__main__":
-    main()
+        if not image_files:
+            print("No images found in the dataset.", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"Found {len(image_files)} images. Starting annotation...", file=sys.stderr)
+
+        count = 0
+        for img_path in image_files:
+            # Get image dimensions
+            img_w, img_h = model.get_image_size(img_path)
+            
+            # Predict
+            predictions = model.predict(img_path)
+            
+            # Prepare label content
+            label_lines = []
+            for pred in predictions:
+                class_id = pred["class_id"]
+                box = pred["box"]
+                
+                xc, yc, w, h = _xyxy_to_yolo(box, img_w, img_h)
+                label_lines.append(f"{class_id} {xc:.6f} {yc:.6f} {w:.6f} {h:.6f}")
+
+            # Write label file (same name as image, but .txt)
+            label_path = img_path.with_suffix(".txt")
+            with open(label_path, "w") as f:
+                f.write("\n".join(label_lines))
+            
+            count += 1
+            if count % 10 == 0:
+                print(f"Processed {count}/{len(image_files)} images...", end="\r", file=sys.stderr)
+
+        print(f"\nAnnotated {count} images.", file=sys.stderr)
+
+        # Update or Create data.yaml to match the model's classes
+        # This is crucial because the class_ids in .txt files correspond to this model
+        print("Updating data.yaml with model classes...", file=sys.stderr)
+        
+        # Try to find existing data.yaml to preserve paths
+        existing_yaml = list(dataset_dir.rglob("data.yaml"))
+        yaml_content = {
+            "train": "images/train", # Default fallback
+            "val": "images/val",     # Default fallback
+        }
+
+        if existing_yaml:
+            try:
+                with open(existing_yaml[0], "r") as f:
+                    loaded = yaml.safe_load(f)
+                    if loaded:
+                        yaml_content.update(loaded)
+            except Exception:
+                pass
+            yaml_path = existing_yaml[0]
+        else:
+            yaml_path = dataset_dir / "data.yaml"
+
+        # Overwrite names with model names to ensure consistency
+        yaml_content["names"] = model.model.names
+        # Ensure nc (number of classes) matches
+        yaml_content["nc"] = len(model.model.names)
+
+        with open(yaml_path, "w") as f:
+            yaml.dump(yaml_content, f, sort_keys=False)
+
+        # Archive results
+        print(f"Zipping output to {output_zip}...", file=sys.stderr)
+        
+        # shutil.make_archive adds extension automatically, so we handle it
+        output_base = str(output_zip.with_suffix(""))
+        final_path = shutil.make_archive(output_base, 'zip', dataset_dir)
+
+        print(f"Done. Saved to {final_path}", file=sys.stderr)
+        print(final_path)
