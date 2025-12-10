@@ -2,6 +2,9 @@ out
 test*
 .env
 
+runs/
+*.pt
+
 *.zip
 output/
 images/
