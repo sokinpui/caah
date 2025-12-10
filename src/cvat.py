@@ -470,9 +470,15 @@ def setup_cvat_parser(parser):
         "-u", "--project-id", required=True, type=int, help="Project ID"
     )
     p_import_ds.add_argument(
-        "-i", "--input-file", required=True, help="Path to dataset file"
+        "-i", "--input-file", required=True, help="Path to dataset zip file"
     )
-    p_import_ds.add_argument("-f", "--format", required=True, help="Dataset format")
+    p_import_ds.add_argument(
+        "-f",
+        "--format",
+        required=True,
+        choices=["yolo", "cvat"],
+        help="Dataset format ('yolo' or 'cvat').",
+    )
     p_export_ds = project_subparsers.add_parser(
         "export_dataset", help="Export dataset from a project"
     )
@@ -573,8 +579,21 @@ def run_cvat(args):
             elif args.action == "recreate":
                 api.import_project(args.input_file)
             elif args.action == "import_dataset":
+                input_file = Path(args.input_file)
+                if not input_file.is_file() or input_file.suffix.lower() != ".zip":
+                    print(
+                        f"Error: Input file must be a .zip file. Got: {args.input_file}",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+
+                format_map = {
+                    "yolo": "YOLO 1.1",
+                    "cvat": "CVAT 1.1",
+                }
+                cvat_format = format_map.get(args.format.lower())
                 api.import_project_dataset(
-                    args.project_id, args.input_file, args.format
+                    args.project_id, args.input_file, cvat_format
                 )
             elif args.action == "export_dataset":
                 api.export_project_dataset(

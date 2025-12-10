@@ -4,6 +4,7 @@ import sys
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
+import tempfile
 
 from yolo_model import YoloModel
 
@@ -224,7 +225,7 @@ def add_annotate_arguments(parser):
         "--output",
         type=str,
         required=True,
-        help="Path to the directory to save annotations.",
+        help="Path to the output zip file for annotations.",
     )
     parser.add_argument(
         "-f",
@@ -258,13 +259,30 @@ def run_annotate(args):
         print(f"Error: Image directory not found at {args.images}", file=sys.stderr)
         return
 
-    try:
-        annotator = AutoAnnotator(args.model, device=args.device)
-        formatter = get_formatter(args.format)
-        annotator.process_images(
-            images_path, Path(args.output), formatter, copy_images=args.copy
+    output_zip_path = Path(args.output)
+    if output_zip_path.suffix.lower() != ".zip":
+        print(
+            f"Error: Output path must be a .zip file. Got: {args.output}",
+            file=sys.stderr,
         )
-        print(args.output)
+        return
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            annotator = AutoAnnotator(args.model, device=args.device)
+            formatter = get_formatter(args.format)
+            annotator.process_images(
+                images_path, tmpdir_path, formatter, copy_images=args.copy
+            )
+
+            shutil.make_archive(
+                base_name=str(output_zip_path.with_suffix("")),
+                format="zip",
+                root_dir=str(tmpdir_path),
+            )
+        print(output_zip_path)
     except (FileNotFoundError, UnsupportedFormatException) as e:
         print(f"Error: {e}", file=sys.stderr)
     except Exception as e:
