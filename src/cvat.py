@@ -175,6 +175,37 @@ class CVATApi:
                 shutil.copyfileobj(r.raw, f)
         print("Download complete.", file=sys.stderr)
 
+    def get_task_metadata(self, task_id):
+        """Retrieve task metadata (labels, attributes)."""
+        url = f"{self.api_url}/tasks/{task_id}"
+        response = self.session.get(url)
+        self._handle_error(response, f"Failed to get metadata for task {task_id}")
+        return response.json()
+
+    def get_task_labels(self, task_id):
+        """Retrieve all labels for a specific task."""
+        # Use a large page size to avoid pagination for labels
+        url = f"{self.api_url}/labels?task_id={task_id}&page_size=1000"
+        response = self.session.get(url)
+        self._handle_error(response, f"Failed to get labels for task {task_id}")
+        # The response is paginated, we want the results
+        return response.json().get("results", [])
+
+    def get_task_data_meta(self, task_id):
+        """Retrieve task data metadata (frame mapping)."""
+        url = f"{self.api_url}/tasks/{task_id}/data/meta"
+        response = self.session.get(url)
+        self._handle_error(response, f"Failed to get data meta for task {task_id}")
+        return response.json()
+
+    def patch_annotations(self, task_id, payload):
+        """Upload annotations via PATCH to append new shapes."""
+        url = f"{self.api_url}/tasks/{task_id}/annotations?action=create"
+        # Using json parameter automatically sets Content-Type: application/json
+        response = self.session.patch(url, json=payload)
+        self._handle_error(response, f"Failed to patch annotations for task {task_id}")
+        return response.json()
+
     # --- Project Operations ---
 
     def create_project(self, name):

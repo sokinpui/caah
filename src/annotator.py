@@ -1,11 +1,14 @@
 import argparse
+import os
 import sys
 import shutil
 import tempfile
 import zipfile
 import yaml
 from pathlib import Path
+from dotenv import load_dotenv
 
+from cvat import CVATApi
 from yolo_model import YoloModel
 
 
@@ -20,14 +23,12 @@ def add_annotate_arguments(parser):
     parser.add_argument(
         "-d",
         "--dataset",
-        required=True,
-        help="Path to the input dataset zip file (YOLO 1.1 format).",
+        help="Path to the input dataset zip file (YOLO 1.1 format). Required for offline mode.",
     )
     parser.add_argument(
         "-o",
         "--output",
-        required=True,
-        help="Path for the output dataset zip file.",
+        help="Path for the output dataset zip file. Required for offline mode.",
     )
     parser.add_argument(
         "--device",
@@ -47,6 +48,16 @@ def add_annotate_arguments(parser):
         help="Disable appending ' (auto)' to class names for generated annotations.",
     )
     parser.set_defaults(mark_auto=True)
+    parser.add_argument(
+        "--task-id",
+        type=int,
+        help="CVAT Task ID for online annotation (bypasses zip dataset).",
+    )
+    parser.add_argument(
+        "--image-dir",
+        type=Path,
+        help="Local directory where task images are stored (required for online mode).",
+    )
 
 
 def _xyxy_to_yolo(box, img_w, img_h):
@@ -108,20 +119,109 @@ def _get_target_label_path(image_path: Path):
     return same_dir, False
 
 
+def run_online(args, model):
+    """
+    Execution flow for online auto-annotation (CVAT API).
+    """
+    load_dotenv()
+    url = os.getenv("CVAT_URL")
+    user = os.getenv("CVAT_USERNAME")
+    password = os.getenv("CVAT_PASSWORD")
+
+    if not all([url, user, password]):
+        print("Error: CVAT credentials not found in environment variables.", file=sys.stderr)
+        sys.exit(1)
+
+    api = CVATApi(url, user, password)
+    task_id = args.task_id
+
+    print(f"Fetching metadata for task {task_id}...", file=sys.stderr)
+    labels = api.get_task_labels(task_id)
+    data_meta = api.get_task_data_meta(task_id)
+
+    label_map = {}
+    source_attr_map = {}
+
+    for label in labels:
+        l_name = label["name"]
+        l_id = label["id"]
+        label_map[l_name] = l_id
+
+        for attr in label.get("attributes", []):
+            if attr["name"] == "source":
+                if attr["input_type"] in ["select", "radio"]:
+                    values = attr.get("values", [])
+                    if "auto" not in values:
+                        print(f"Warning: 'source' attribute for label '{l_name}' does not have 'auto' option.", file=sys.stderr)
+                        continue
+                source_attr_map[l_id] = attr["id"]
+                break
+
+    frames = data_meta.get("frames", [])
+    if not frames:
+        print("Error: No frame information found in task data.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Found {len(frames)} frames. Starting annotation...", file=sys.stderr)
+
+    shapes_buffer = []
+    processed_count = 0
+    BATCH_SIZE = 100
+
+    for i, frame_info in enumerate(frames):
+        frame_idx = i
+        file_name = frame_info.get("name")
+        image_path = args.image_dir / file_name
+
+        if not image_path.exists():
+            print(f"Warning: Image not found at {image_path}. Skipping.", file=sys.stderr)
+            continue
+
+        predictions = model.predict(image_path)
+
+        for pred in predictions:
+            class_name = pred["label"]
+            box = pred["box"]
+            
+            if class_name not in label_map:
+                continue
+
+            l_id = label_map[class_name]
+            attributes = []
+            if l_id in source_attr_map:
+                attributes.append({"spec_id": source_attr_map[l_id], "value": "auto"})
+
+            shape = {
+                "type": "rectangle",
+                "frame": frame_idx,
+                "label_id": l_id,
+                "points": box,
+                "rotation": 0,
+                "attributes": attributes,
+            }
+            shapes_buffer.append(shape)
+
+        processed_count += 1
+        print(f"Processed {processed_count}/{len(frames)}...", end="\r", file=sys.stderr)
+
+        if len(shapes_buffer) >= BATCH_SIZE:
+            api.patch_annotations(task_id, {"shapes": shapes_buffer, "version": 0})
+            shapes_buffer = []
+
+    if shapes_buffer:
+        api.patch_annotations(task_id, {"shapes": shapes_buffer, "version": 0})
+    
+    print(f"\nDone. Processed {processed_count} frames.", file=sys.stderr)
+
+
 def run_annotate(args):
     """
     Main execution flow for auto-annotation.
     """
     model_path = Path(args.model)
-    input_zip = Path(args.dataset)
-    output_zip = Path(args.output)
 
     if not model_path.exists():
         print(f"Error: Model file not found at {model_path}", file=sys.stderr)
-        sys.exit(1)
-
-    if not input_zip.exists():
-        print(f"Error: Input dataset not found at {input_zip}", file=sys.stderr)
         sys.exit(1)
 
     # Initialize model
@@ -129,6 +229,24 @@ def run_annotate(args):
         model = YoloModel(str(model_path), device=args.device)
     except Exception as e:
         print(f"Error loading model: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.task_id:
+        if not args.image_dir:
+            print("Error: --image-dir is required when --task-id is provided.", file=sys.stderr)
+            sys.exit(1)
+        run_online(args, model)
+        return
+
+    if not args.dataset or not args.output:
+        print("Error: --dataset and --output are required for offline mode.", file=sys.stderr)
+        sys.exit(1)
+
+    input_zip = Path(args.dataset)
+    output_zip = Path(args.output)
+
+    if not input_zip.exists():
+        print(f"Error: Input dataset not found at {input_zip}", file=sys.stderr)
         sys.exit(1)
 
     with tempfile.TemporaryDirectory() as tmpdir:
