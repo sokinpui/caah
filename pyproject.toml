@@ -42,6 +42,8 @@ py-modules = [
     "annotator",
     "cvat",
     "yolo_model",
+    "annotate_online",
+    "annotate_offline",
     "train",
     "converter",
     "data_utils",

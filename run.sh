@@ -83,7 +83,7 @@ read -r conf_threshold
 
 echo ""
 echo "Annotating dataset at $images_set using model at $model_path..."
-result=$(caah-cmd annotate -m "$model_path" -d "$images_set" -o "$annotated_results" --device "$device" --config "$conf_threshold")
+result=$(caah-cmd annotate-offline -m "$model_path" -d "$images_set" -o "$annotated_results" --device "$device" --conf "$conf_threshold")
 
 # Import annotated dataset back to CVAT
 echo ""
