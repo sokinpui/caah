@@ -4,9 +4,14 @@
 caah --help
 ```
 
-### `annotate`
+### `annotate` command
 
-Automatically generate annotations for a dataset.
+Run auto-annotation. This command has two modes:
+
+1.  **Offline Mode**: Annotates a local dataset provided as a zip file. The input zip must contain the images.
+2.  **Online Mode**: Connects to a CVAT server, annotates images from a local directory (like a network share), and uploads the results directly to a CVAT task. This is efficient as it avoids transferring image files.
+
+#### Offline Mode Example
 
 ```bash
 # Example: Annotate images and save in CVAT XML format
@@ -14,6 +19,19 @@ caah annotate --model /path/to/your/best.pt \
               --dataset /path/to/dataset.zip \
               --output /path/to/annotations.zip \
               --device cpu --conf 0.5
+```
+
+#### Online Mode Example
+
+This is ideal for large datasets where images are stored on a shared drive and you want to update a CVAT task directly.
+
+```bash
+# Example: Annotate images for CVAT task 42
+# Images are located on a mounted network drive
+caah annotate --model /path/to/your/best.pt \
+              --task-id 42 \
+              --image-dir /mnt/shared_drive/project_images/ \
+              --device cpu
 ```
 
 ### `train`
@@ -95,14 +113,16 @@ You may need to restart your shell for the changes to take effect.
 
 ### `annotate` command
 
-- **Description**: Run auto-annotation.
+- **Description**: Run auto-annotation (supports offline and online modes).
 - **Options**:
   - `-m`, `--model` (required): Path to the YOLO model file (.pt).
-  - `-d`, `--dataset` (required): Path to the input dataset zip file (YOLO 1.1 format).
-  - `-o`, `--output` (required): Path for the output dataset zip file.
+  - `-d`, `--dataset`: Path to the input dataset zip file (YOLO 1.1 format). Required for offline mode.
+  - `-o`, `--output`: Path for the output dataset zip file. Required for offline mode.
   - `--device`: Device to run inference on (cpu, gpu). Default: `cpu`.
   - `--conf`: Confidence threshold for predictions. Default: `0.25`.
   - `--no-mark-auto`: Disable appending ' (auto)' to class names for generated annotations.
+  - `--task-id`: CVAT Task ID for online annotation. When used, `--dataset` and `--output` are ignored.
+  - `--image-dir`: Local directory where task images are stored. Required for online mode.
 
 ### `convert` command
 
