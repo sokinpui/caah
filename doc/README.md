@@ -36,13 +36,14 @@ caah annotate --model /path/to/your/best.pt \
 
 ### `train`
 
-Train a YOLO model using a dataset in "Ultralytics YOLO" format, typically exported from CVAT as a zip file.
+Train a YOLO model using a dataset in "Ultralytics YOLO" format. If the dataset is not pre-split, you can provide a split ratio.
 
 ```bash
 # Example: Train a yolo11n model for 50 epochs
 caah train --data /path/to/dataset.zip \
            --model yolo11n \
            --epochs 50 \
+           --split 80:20 \
            --device cpu
 ```
 
