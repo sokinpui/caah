@@ -102,6 +102,8 @@ def run_online(args, model):
                     )
                     shapes_buffer.append(shape)
 
+                os.remove(temp_img_path)
+
                 # Batch Upload
                 if len(shapes_buffer) >= BATCH_SIZE:
                     print(
