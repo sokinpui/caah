@@ -5,3 +5,4 @@ tabulate
 argcomplete
 datumaro
 pyyaml
+cvat-sdk

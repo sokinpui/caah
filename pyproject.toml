@@ -24,6 +24,7 @@ dependencies = [
     "torch",
     "argcomplete",
     "datumaro",
+    "cvat-sdk",
 ]
 
 [project.urls]
