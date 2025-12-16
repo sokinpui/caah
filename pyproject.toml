@@ -25,6 +25,7 @@ dependencies = [
     "argcomplete",
     "datumaro",
     "cvat-sdk",
+    "Pillow",
 ]
 
 [project.urls]

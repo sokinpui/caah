@@ -1,11 +1,11 @@
+import io
 import os
 import sys
-import tempfile
-from pathlib import Path
 
 from cvat_sdk import make_client
 from cvat_sdk.api_client import models
 from dotenv import load_dotenv
+from PIL import Image
 
 from yolo_model import YoloModel
 
@@ -13,7 +13,7 @@ from yolo_model import YoloModel
 def run_online(args, model):
     """
     Execution flow for online auto-annotation using official CVAT SDK.
-    Downloads frames on-the-fly, infers, and uploads annotations.
+    Downloads frames to RAM, infers, and uploads annotations.
     """
     url = os.getenv("CVAT_URL")
     user = os.getenv("CVAT_USERNAME")
@@ -51,81 +51,74 @@ def run_online(args, model):
         BATCH_SIZE = 100
 
         # 2. Iterate over frames
-        # We use a temp directory to store the downloaded frame for YOLO to read
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_path = Path(tmp_dir)
+        # No temp directory needed; we process in memory.
+        for frame_id in range(task.size):
+            # Download frame to RAM
+            frame_data = task.get_frame(frame_id)
+            image_bytes = frame_data.read()
 
-            for frame_id in range(task.size):
-                # Download frame to a temp file
-                frame_data = task.get_frame(frame_id)
+            # Convert bytes to PIL Image
+            image_source = Image.open(io.BytesIO(image_bytes))
 
-                # Determine extension based on mime_type or default to jpg
-                ext = ".jpg"
-                temp_img_path = tmp_path / f"frame_{frame_id}{ext}"
+            # Run Inference
+            # Ensure your YoloModel.predict accepts a PIL Image object
+            predictions = model.predict(image_source)
 
-                with open(temp_img_path, "wb") as f:
-                    f.write(frame_data.read())
+            # Process Predictions
+            for pred in predictions:
+                class_name = pred["label"]
+                box = pred["box"]  # [x1, y1, x2, y2]
 
-                # Run Inference
-                predictions = model.predict(temp_img_path)
+                if class_name not in label_map:
+                    # Warning: Model predicts a class not in CVAT task
+                    continue
 
-                # Process Predictions
-                for pred in predictions:
-                    class_name = pred["label"]
-                    box = pred["box"]  # [x1, y1, x2, y2]
+                l_id = label_map[class_name]
 
-                    if class_name not in label_map:
-                        # Warning: Model predicts a class not in CVAT task
-                        continue
-
-                    l_id = label_map[class_name]
-
-                    # Handle Attributes (e.g., auto tag)
-                    attributes = []
-                    if l_id in source_attr_map:
-                        attributes.append(
-                            models.AttributeValRequest(
-                                spec_id=source_attr_map[l_id], value="auto"
-                            )
+                # Handle Attributes (e.g., auto tag)
+                attributes = []
+                if l_id in source_attr_map:
+                    attributes.append(
+                        models.AttributeValRequest(
+                            spec_id=source_attr_map[l_id], value="auto"
                         )
-
-                    # Create Shape
-                    # Points in CVAT are [x1, y1, x2, y2] for rectangle
-                    shape = models.LabeledShapeRequest(
-                        type=models.ShapeType("rectangle"),
-                        frame=frame_id,
-                        label_id=l_id,
-                        points=box,
-                        rotation=0,
-                        attributes=attributes,
-                        source="auto",  # Mark the annotation itself as auto generated
                     )
-                    shapes_buffer.append(shape)
 
-                os.remove(temp_img_path)
+                # Create Shape
+                # Points in CVAT are [x1, y1, x2, y2] for rectangle
+                shape = models.LabeledShapeRequest(
+                    type=models.ShapeType("rectangle"),
+                    frame=frame_id,
+                    label_id=l_id,
+                    points=box,
+                    rotation=0,
+                    attributes=attributes,
+                    source="auto",  # Mark the annotation itself as auto generated
+                )
+                shapes_buffer.append(shape)
 
-                # Batch Upload
-                if len(shapes_buffer) >= BATCH_SIZE:
-                    print(
-                        f"Uploading batch of {len(shapes_buffer)} annotations...",
-                        end="\r",
-                        file=sys.stderr,
-                    )
-                    task.update_annotations(
-                        models.PatchedLabeledDataRequest(shapes=shapes_buffer)
-                    )
-                    shapes_buffer = []
-
+            # Batch Upload
+            if len(shapes_buffer) >= BATCH_SIZE:
                 print(
-                    f"Processed frame {frame_id+1}/{task.size}...",
+                    f"Uploading batch of {len(shapes_buffer)} annotations...",
                     end="\r",
                     file=sys.stderr,
                 )
-
-            # Upload remaining
-            if shapes_buffer:
                 task.update_annotations(
                     models.PatchedLabeledDataRequest(shapes=shapes_buffer)
                 )
+                shapes_buffer = []
+
+            print(
+                f"Processed frame {frame_id+1}/{task.size}...",
+                end="\r",
+                file=sys.stderr,
+            )
+
+        # Upload remaining
+        if shapes_buffer:
+            task.update_annotations(
+                models.PatchedLabeledDataRequest(shapes=shapes_buffer)
+            )
 
     print(f"\nDone. Annotated task {args.task_id}.", file=sys.stderr)

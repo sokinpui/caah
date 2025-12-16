@@ -1,5 +1,5 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 
 class YoloModel:
@@ -42,7 +42,8 @@ class YoloModel:
         """
         Performs inference on a single image and returns annotations.
         """
-        print(f"Predicting for image: {image_path}", file=sys.stderr)
+        if isinstance(image_path, (str, Path)):
+            print(f"Predicting for image: {image_path}", file=sys.stderr)
 
         results = self.model(image_path, verbose=False, device=self.device)
 

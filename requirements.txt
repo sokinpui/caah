@@ -6,3 +6,4 @@ argcomplete
 datumaro
 pyyaml
 cvat-sdk
+Pillow
