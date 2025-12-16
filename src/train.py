@@ -9,6 +9,25 @@ from pathlib import Path
 import yaml
 
 
+def _resolve_device(device: str) -> str:
+    """Resolves the device string to a valid torch/ultralytics device."""
+    import torch
+
+    if device == "cpu":
+        return "cpu"
+    if device == "gpu":
+        if torch.cuda.is_available():
+            return "cuda"
+        if torch.backends.mps.is_available():
+            return "mps"
+        print(
+            "Warning: GPU requested but not available. Falling back to CPU.",
+            file=sys.stderr,
+        )
+        return "cpu"
+    return device
+
+
 def _find_class_names(extracted_path: Path) -> list[str]:
     """Finds and parses the class names file (e.g., obj.names, data.yaml)."""
     # Prefer data.yaml
@@ -241,6 +260,8 @@ def train_model(
     print("--- Starting Training ---", file=sys.stderr)
     from ultralytics import YOLO
 
+    resolved_device = _resolve_device(device)
+
     print(f"Data: {data_yaml_path}", file=sys.stderr)
     print(f"Model: {model_size}", file=sys.stderr)
     print(f"Epochs: {epochs}", file=sys.stderr)
@@ -253,7 +274,7 @@ def train_model(
         epochs=epochs,
         imgsz=img_size,
         batch=batch_size,
-        device=device,
+        device=resolved_device,
         plots=True,
         save=True,
     )
@@ -344,8 +365,8 @@ def add_train_arguments(parser):
     parser.add_argument(
         "--device",
         type=str,
-        default="0",
-        help="Device to use: '0' for GPU, 'cpu' for CPU. Default: 0",
+        default="gpu",
+        help="Device to use: 'gpu', 'cpu', or a device ID like '0'. Default: 'gpu'",
     )
     parser.add_argument(
         "-s",

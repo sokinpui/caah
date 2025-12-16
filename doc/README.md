@@ -200,7 +200,7 @@ You may need to restart your shell for the changes to take effect.
   - `-e`, `--epochs`: Number of training epochs. Default: `50`.
   - `--imgsz`: Image size (pixels). Default: `640`.
   - `-b`, `--batch`: Batch size (reduce for GPU OOM errors). Default: `16`.
-  - `--device`: Device to use: '0' for GPU, 'cpu' for CPU. Default: `0`.
+  - `--device`: Device to use: 'gpu', 'cpu', or a device ID like '0'. Default: `gpu`.
 
 ---
 
