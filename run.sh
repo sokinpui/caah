@@ -18,8 +18,8 @@ echo "Input the name for the exported dataset zip ( e.g., exported_dataset.zip):
 read -r export_dataset
 
 echo ""
-echo "Exporting dataset from CVAT project ID $project_id to $export_dataset..."
-dataset=$(caah-cmd cvat project export_dataset -u "$project_id" -o "$export_dataset")
+echo "Exporting manual dataset from CVAT project ID $project_id to $export_dataset..."
+dataset=$(caah-cmd cvat project export_dataset -u "$project_id" -o "$export_dataset" --only-manual)
 
 echo ""
 echo "Dataset exported to $dataset"
@@ -66,26 +66,20 @@ echo "Input the path to the trained model weights (e.g., runs/train/exp/weights/
 read -r model_path
 
 echo ""
-echo "Input the path the dataset to be annotated: "
-read -r images_set
+echo "Input the CVAT Task ID to be annotated: "
+read -r task_id
 
 echo ""
 echo "Input the device to use for annotation (cpu, gpu): "
 read -r device
 
 echo ""
-echo "Input the annotated dataset zip (e.g., annotated_results.zip): "
-read -r annotated_results
-
-echo ""
-echo "Inpu the confidence threshold for annotation (e.g., 0.25): "
+echo "Input the confidence threshold for annotation (e.g., 0.25): "
 read -r conf_threshold
 
 echo ""
-echo "Annotating dataset at $images_set using model at $model_path..."
-result=$(caah-cmd annotate-offline -m "$model_path" -d "$images_set" -o "$annotated_results" --device "$device" --conf "$conf_threshold")
+echo "Annotating CVAT Task $task_id using model at $model_path..."
+caah-cmd annotate-online -m "$model_path" --task-id "$task_id" --device "$device" --conf "$conf_threshold"
 
-# Import annotated dataset back to CVAT
 echo ""
-echo "Importing annotated dataset back to CVAT project ID $project_id..."
-caah cvat project import_dataset -i "$result" -u "$project_id" -f yolo
+echo "Annotation complete. Results are live in CVAT."

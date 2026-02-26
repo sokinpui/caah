@@ -3,6 +3,7 @@ import os
 import shutil
 import sys
 import time
+import json
 from pathlib import Path
 
 import requests
@@ -278,11 +279,18 @@ class CVATApi:
             print("Project import started.", file=sys.stderr)
 
     def export_project_dataset(
-        self, project_id, output_file, format_name, save_images=True
+        self, project_id, output_file, format_name, save_images=True, only_manual=False
     ):
         """Export a project's dataset."""
         url = f"{self.api_url}/projects/{project_id}/dataset/export"
         params = {"format": format_name, "save_images": save_images}
+        
+        if only_manual:
+            # CVAT uses a JSON-based logic for filtering. 
+            # This filter ensures only annotations with source 'manual' are included.
+            filter_logic = {"and": [{"==": [{"var": "source"}, "manual"]}]}
+            params["filter"] = json.dumps(filter_logic)
+
         response = self.session.post(url, params=params)
         self._handle_error(
             response, f"Failed to trigger export for project {project_id}"
@@ -526,6 +534,12 @@ def setup_cvat_parser(parser):
         action="store_false",
         help="Do not include images in the export. Images are included by default.",
     )
+    p_export_ds.add_argument(
+        "--only-manual",
+        dest="only_manual",
+        action="store_true",
+        help="Export only manual annotations, excluding auto-generated ones.",
+    )
 
     # # Task parser
     # task_parser = subparsers.add_parser("task", help="Task operations")
@@ -628,7 +642,7 @@ def run_cvat(args):
                 )
             elif args.action == "export_dataset":
                 api.export_project_dataset(
-                    args.project_id, args.output_file, args.format, args.save_images
+                    args.project_id, args.output_file, args.format, args.save_images, args.only_manual
                 )
                 print(args.output_file)
         # elif args.resource == "task":

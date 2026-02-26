@@ -4,9 +4,7 @@ import os
 import argcomplete
 
 from annotator import (
-    add_annotate_offline_arguments,
     add_annotate_online_arguments,
-    run_annotate_offline,
     run_annotate_online,
 )
 from cvat import run_cvat, setup_cvat_parser
@@ -28,12 +26,6 @@ def main():
         action="store_true",
         help="Suppress all messages except the final output path to stdout.",
     )
-
-    annotate_offline_parser = subparsers.add_parser(
-        "annotate-offline", help="Run offline auto-annotation."
-    )
-    add_annotate_offline_arguments(annotate_offline_parser)
-    annotate_offline_parser.set_defaults(func=run_annotate_offline)
 
     annotate_online_parser = subparsers.add_parser(
         "annotate-online", help="Run online auto-annotation."
