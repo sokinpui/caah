@@ -5,7 +5,9 @@ import zipfile
 from pathlib import Path
 
 import yaml
+
 from data_utils import find_class_names, split_dataset
+
 
 def _resolve_device(device: str) -> str:
     """Resolves the device string to a valid torch/ultralytics device."""
@@ -117,7 +119,6 @@ def process_dataset_and_train(
         else:
             data_yaml_path = find_yaml_file(extract_dir)
 
-        train_model(data_yaml_path, model_size, epochs, img_size, batch_size, device)
         train_model(data_yaml_path, model_size, epochs, img_size, batch_size, device)
 
 
