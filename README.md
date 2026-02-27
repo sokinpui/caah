@@ -9,8 +9,10 @@
     cd caah
     ```
 
-2.  Install the required dependencies:
+2.  Install the required dependencies(use `direnv`):
     ```bash
+    conda create --name caah python=3.10
+    direnv allow
     pip install -r requirements.txt
     pip install -e .
     ```
