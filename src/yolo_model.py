@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 from utils import resolve_device
 
@@ -22,7 +23,7 @@ class YoloModel:
         print(f"YOLO model loaded from {model_path}", file=sys.stderr)
         print(f"Using device: {self.device}", file=sys.stderr)
 
-    def predict(self, image_path: Path) -> list[dict]:
+    def predict(self, image_path: Path) -> List[Dict]:
         """
         Performs inference on a single image and returns annotations.
         """
@@ -63,7 +64,7 @@ class YoloModel:
 
         return annotations
 
-    def get_image_size(self, image_path: Path) -> tuple[int, int]:
+    def get_image_size(self, image_path: Path) -> Tuple[int, int]:
         """
         Gets the width and height of an image.
         """

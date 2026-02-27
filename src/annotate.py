@@ -20,7 +20,7 @@ def annotate(
     task_id: Annotated[int, typer.Option("--task-id", help="CVAT Task ID.")],
     device: Annotated[str, typer.Option(help="Device (cpu, gpu).")] = "cpu",
     conf: Annotated[float, typer.Option(help="Confidence threshold.")] = 0.25,
-):
+) -> None:
     """Main execution flow for auto-annotation."""
     load_dotenv()
     model = _load_yolo_model(str(model_path), device)

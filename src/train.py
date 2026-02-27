@@ -36,7 +36,7 @@ def train_model(
     img_size: int,
     batch_size: int,
     device: str,
-    nas_path: str = None,
+    nas_path: Optional[str] = None,
 ):
     """
     Initializes and trains the YOLO model.
@@ -75,8 +75,8 @@ def process_dataset_and_train(
     img_size: int,
     batch_size: int,
     device: str,
-    split: str = None,
-    nas_path: str = None,
+    split: Optional[str] = None,
+    nas_path: Optional[str] = None,
 ):
     """
     Extracts the dataset from a zip file and initiates the training process.
@@ -140,18 +140,16 @@ def train(
     load_dotenv()
     try:
         model_spec = path if path else model
-
-        if not path and not model_spec.endswith(".pt"):
+        if not model_spec.endswith(".pt"):
             model_spec += ".pt"
 
         nas_path = None
         if network_drive:
             nas_path = os.getenv("NAS_PATH")
-            if not nas_path:
-                print(
-                    "Error: --network-drive requires NAS_PATH in .env", file=sys.stderr
-                )
-                sys.exit(1)
+
+        if network_drive and not nas_path:
+            print("Error: --network-drive requires NAS_PATH in .env", file=sys.stderr)
+            sys.exit(1)
 
         process_dataset_and_train(
             dataset_zip_path=data,

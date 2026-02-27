@@ -4,7 +4,7 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, List, Optional, Tuple
 
 import typer
 import yaml
@@ -50,7 +50,7 @@ def run_data_split(
 
 
 def split_dataset(
-    source_dir: Path, dest_dir: Path, split_str: str, nas_path: str = None
+    source_dir: Path, dest_dir: Path, split_str: str, nas_path: Optional[str] = None
 ) -> Path:
     """Splits files from source_dir into train/val sets in dest_dir."""
     try:
@@ -139,7 +139,12 @@ def find_class_names(extracted_path: Path) -> list[str]:
     raise FileNotFoundError("Could not find class names file (*.yaml or *.names).")
 
 
-def _copy_split_files(pairs, img_dest, lbl_dest, only_labels=False):
+def _copy_split_files(
+    pairs: List[Tuple[Path, Path]],
+    img_dest: Path,
+    lbl_dest: Path,
+    only_labels: bool = False,
+) -> None:
     img_dest.mkdir(parents=True, exist_ok=True)
     lbl_dest.mkdir(parents=True, exist_ok=True)
     for img_path, lbl_path in pairs:

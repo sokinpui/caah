@@ -32,11 +32,9 @@ class TableFormatter:
         if not projects:
             return "No projects found"
 
-        # Create header
         header = ["ID", "Name", "Owner", "Status", "Tasks", "Created"]
         separator = "-" * 80
 
-        # Format each project
         lines = [separator]
         lines.append(
             f"{header[0]:<4} {header[1]:<20} {header[2]:<12} {header[3]:<12} {header[4]:<6} {header[5]:<16}"
@@ -53,7 +51,7 @@ class TableFormatter:
             )
             status = project.get("status", "")[:10]
             tasks_count = str(project.get("tasks", {}).get("count", 0))
-            created = project.get("created_date", "")[:10]  # Just date part
+            created = project.get("created_date", "")[:10]
 
             lines.append(
                 f"{project_id:<4} {name:<20} {owner:<12} {status:<12} {tasks_count:<6} {created:<16}"
@@ -64,62 +62,13 @@ class TableFormatter:
 
         return "\n".join(lines)
 
-    # @staticmethod
-    # def format_tasks_table(tasks_data: dict) -> str:
-    #     """Format tasks list as a readable table."""
-    #     if not tasks_data or "results" not in tasks_data:
-    #         return "No tasks found"
-
-    #     tasks = tasks_data["results"]
-    #     if not tasks:
-    #         return "No tasks found"
-
-    #     # Create header
-    #     header = ["ID", "Name", "Project ID", "Owner", "Status", "Size", "Created"]
-    #     separator = "-" * 90
-
-    #     # Format each task
-    #     lines = [separator]
-    #     lines.append(
-    #         f"{header[0]:<4} {header[1]:<20} {header[2]:<10} {header[3]:<12} {header[4]:<12} {header[5]:<6} {header[6]:<16}"
-    #     )
-    #     lines.append(separator)
-
-    #     for task in tasks:
-    #         task_id = str(task.get("id", ""))
-    #         name = task.get("name", "")[:18] + (
-    #             ".." if len(task.get("name", "")) > 18 else ""
-    #         )
-    #         project_id = str(task.get("project_id", "-"))
-    #         owner = task.get("owner", {}).get("username", "")[:10] + (
-    #             ".." if len(task.get("owner", {}).get("username", "")) > 10 else ""
-    #         )
-    #         status = task.get("status", "")[:10]
-    #         size = str(task.get("size", 0))
-    #         created = task.get("created_date", "")[:10]  # Just date part
-
-    #         lines.append(
-    #             f"{task_id:<4} {name:<20} {project_id:<10} {owner:<12} {status:<12} {size:<6} {created:<16}"
-    #         )
-
-    #     lines.append(separator)
-
-    #     # Add summary information
-    #     total_tasks = len(tasks)
-    #     completed_tasks = sum(1 for t in tasks if t.get("status") == "completed")
-    #     in_progress_tasks = sum(1 for t in tasks if t.get("status") == "annotation")
-
-    #     lines.append(
-    #         f"Total: {total_tasks} task(s) | Completed: {completed_tasks} | In Progress: {in_progress_tasks}"
-    #     )
-
-    #     return "\n".join(lines)
-
 
 class CVATApi:
     """A class to interact with the CVAT REST API without the CVAT-SDK."""
 
-    def __init__(self, url, username, password):
+    def __init__(
+        self, url: Optional[str], username: Optional[str], password: Optional[str]
+    ):
         if not url:
             raise ValueError("CVAT_URL cannot be empty.")
         self.base_url = url.rstrip("/")
@@ -127,8 +76,12 @@ class CVATApi:
         self.session = requests.Session()
         self._login(username, password)
 
-    def _login(self, username, password):
+    def _login(self, username: Optional[str], password: Optional[str]) -> None:
         """Authenticate and store session token."""
+        if not username or not password:
+            print("Error: CVAT credentials missing.", file=sys.stderr)
+            sys.exit(1)
+
         login_url = f"{self.api_url}/auth/login"
         try:
             response = self.session.post(
@@ -144,23 +97,26 @@ class CVATApi:
                 print(f"Response: {e.response.text}", file=sys.stderr)
             sys.exit(1)
 
-    def _handle_error(self, response, message):
+    def _handle_error(self, response: requests.Response, message: str) -> None:
         """Generic error handler for API responses."""
-        if response.status_code >= 400:
-            error_message = (
-                f"Error: {message}\n"
-                f"Status Code: {response.status_code}\n"
-                f"Response: {response.text}"
-            )
-            raise requests.exceptions.HTTPError(error_message, response=response)
+        if response.status_code < 400:
+            return
 
-    def wait_for_job(self, rq_id):
+        error_message = (
+            f"Error: {message}\n"
+            f"Status Code: {response.status_code}\n"
+            f"Response: {response.text}"
+        )
+        raise requests.exceptions.HTTPError(error_message, response=response)
+
+    def wait_for_job(self, rq_id: str) -> dict:
         """Poll the status of an asynchronous job."""
         request_url = f"{self.api_url}/requests/{rq_id}"
         print(f"Waiting for job {rq_id} to complete...", file=sys.stderr)
         while True:
             response = self.session.get(request_url)
             self._handle_error(response, f"Failed to get job status for {rq_id}")
+
             data = response.json()
             status = data.get("status")
             print(f"Job {rq_id} status: {status}", file=sys.stderr)
@@ -176,7 +132,7 @@ class CVATApi:
 
             time.sleep(2)
 
-    def _download_file(self, url, output_path):
+    def _download_file(self, url: str, output_path: str) -> None:
         """Download a file with streaming."""
         print(f"Downloading from {url} to {output_path}...", file=sys.stderr)
         with self.session.get(url, stream=True) as r:
@@ -185,40 +141,35 @@ class CVATApi:
                 shutil.copyfileobj(r.raw, f)
         print("Download complete.", file=sys.stderr)
 
-    def get_task_metadata(self, task_id):
+    def get_task_metadata(self, task_id: int) -> dict:
         """Retrieve task metadata (labels, attributes)."""
         url = f"{self.api_url}/tasks/{task_id}"
         response = self.session.get(url)
         self._handle_error(response, f"Failed to get metadata for task {task_id}")
         return response.json()
 
-    def get_task_labels(self, task_id):
+    def get_task_labels(self, task_id: int) -> list:
         """Retrieve all labels for a specific task."""
-        # Use a large page size to avoid pagination for labels
         url = f"{self.api_url}/labels?task_id={task_id}&page_size=1000"
         response = self.session.get(url)
         self._handle_error(response, f"Failed to get labels for task {task_id}")
-        # The response is paginated, we want the results
         return response.json().get("results", [])
 
-    def get_task_data_meta(self, task_id):
+    def get_task_data_meta(self, task_id: int) -> dict:
         """Retrieve task data metadata (frame mapping)."""
         url = f"{self.api_url}/tasks/{task_id}/data/meta"
         response = self.session.get(url)
         self._handle_error(response, f"Failed to get data meta for task {task_id}")
         return response.json()
 
-    def patch_annotations(self, task_id, payload):
+    def patch_annotations(self, task_id: int, payload: dict) -> dict:
         """Upload annotations via PATCH to append new shapes."""
         url = f"{self.api_url}/tasks/{task_id}/annotations?action=create"
-        # Using json parameter automatically sets Content-Type: application/json
         response = self.session.patch(url, json=payload)
         self._handle_error(response, f"Failed to patch annotations for task {task_id}")
         return response.json()
 
-    # --- Project Operations ---
-
-    def create_project(self, name):
+    def create_project(self, name: str) -> dict:
         """Create a new project."""
         url = f"{self.api_url}/projects"
         response = self.session.post(url, json={"name": name})
@@ -230,14 +181,14 @@ class CVATApi:
         )
         return project_data
 
-    def list_projects(self):
+    def list_projects(self) -> dict:
         """List all projects."""
-        url = f"{self.api_url}/projects?page_size=100"  # Get more items per page
+        url = f"{self.api_url}/projects?page_size=100"
         response = self.session.get(url)
         self._handle_error(response, "Failed to list projects")
         return response.json()
 
-    def delete_project(self, project_id):
+    def delete_project(self, project_id: int) -> None:
         """Delete a project."""
         url = f"{self.api_url}/projects/{project_id}"
         response = self.session.delete(url)
@@ -245,7 +196,7 @@ class CVATApi:
             self._handle_error(response, f"Failed to delete project {project_id}")
         print(f"Project {project_id} deleted successfully.", file=sys.stderr)
 
-    def backup_project(self, project_id, output_file):
+    def backup_project(self, project_id: int, output_file: str) -> None:
         """Backup a project."""
         url = f"{self.api_url}/projects/{project_id}/backup/export"
         response = self.session.post(url)
@@ -272,7 +223,7 @@ class CVATApi:
 
         self._download_file(download_url, output_file)
 
-    def import_project(self, backup_file):
+    def import_project(self, backup_file: str) -> None:
         """Import a project from a backup."""
         url = f"{self.api_url}/projects/backup"
         with open(backup_file, "rb") as f:
@@ -288,15 +239,18 @@ class CVATApi:
             print("Project import started.", file=sys.stderr)
 
     def export_project_dataset(
-        self, project_id, output_file, format_name, save_images=True, only_manual=False
-    ):
+        self,
+        project_id: int,
+        output_file: str,
+        format_name: str,
+        save_images: bool = True,
+        only_manual: bool = False,
+    ) -> None:
         """Export a project's dataset."""
         url = f"{self.api_url}/projects/{project_id}/dataset/export"
         params = {"format": format_name, "save_images": save_images}
 
         if only_manual:
-            # CVAT uses a JSON-based logic for filtering.
-            # This filter ensures only annotations with source 'manual' are included.
             filter_logic = {"and": [{"==": [{"var": "source"}, "manual"]}]}
             params["filter"] = json.dumps(filter_logic)
 
@@ -324,7 +278,9 @@ class CVATApi:
 
         self._download_file(download_url, output_file)
 
-    def import_project_dataset(self, project_id, dataset_file, format_name):
+    def import_project_dataset(
+        self, project_id: int, dataset_file: str, format_name: str
+    ) -> None:
         """Import a dataset into a project."""
         url = f"{self.api_url}/projects/{project_id}/dataset"
         params = {"format": format_name}
@@ -342,103 +298,14 @@ class CVATApi:
         else:
             print("Dataset import started.", file=sys.stderr)
 
-    # # --- Task Operations ---
-
-    # def create_task(self, name, project_id):
-    #     """Create a new task."""
-    #     url = f"{self.api_url}/tasks"
-    #     payload = {"name": name}
-    #     if project_id:
-    #         payload["project_id"] = project_id
-
-    #     response = self.session.post(url, json=payload)
-    #     self._handle_error(response, f"Failed to create task '{name}'")
-    #     task_data = response.json()
-    #     print(f"Successfully created task '{name}' with ID: {task_data['id']}")
-    #     return task_data
-
-    # def attach_data_to_task(self, task_id, image_paths):
-    #     """Attach data (images) to a task."""
-    #     data_url = f"{self.api_url}/tasks/{task_id}/data"
-    #     files_to_upload = []
-    #     try:
-    #         for p in image_paths:
-    #             files_to_upload.append(("client_files", open(p, "rb")))
-
-    #         data = {"image_quality": 70}
-    #         response = self.session.post(data_url, data=data, files=files_to_upload)
-    #         self._handle_error(response, f"Failed to upload images to task {task_id}")
-
-    #         if response.status_code == 202:
-    #             rq_id = response.json().get("rq_id")
-    #             self.wait_for_job(rq_id)
-    #             print("Image upload job finished.")
-    #         else:
-    #             print(
-    #                 f"Successfully uploaded {len(image_paths)} images to task {task_id}."
-    #             )
-    #     finally:
-    #         for _, f in files_to_upload:
-    #             f.close()
-
-    # def list_tasks(self):
-    #     """List all tasks."""
-    #     url = f"{self.api_url}/tasks?page_size=100"  # Get more items per page
-    #     response = self.session.get(url)
-    #     self._handle_error(response, "Failed to list tasks")
-    #     return response.json()
-
-    # def delete_task(self, task_id):
-    #     """Delete a task."""
-    #     url = f"{self.api_url}/tasks/{task_id}"
-    #     response = self.session.delete(url)
-    #     if response.status_code != 204:
-    #         self._handle_error(response, f"Failed to delete task {task_id}")
-    #     print(f"Task {task_id} deleted successfully.")
-
-    # def backup_task(self, task_id, output_file):
-    #     """Backup a task."""
-    #     url = f"{self.api_url}/tasks/{task_id}/backup/export"
-    #     response = self.session.post(url)
-    #     self._handle_error(response, f"Failed to trigger backup for task {task_id}")
-
-    #     if response.status_code != 202:
-    #         raise Exception(
-    #             f"Unexpected status code for backup trigger: {response.status_code}\n{response.text}"
-    #         )
-
-    #     rq_id = response.json().get("rq_id")
-    #     if not rq_id:
-    #         raise Exception("Could not get request ID for backup job.")
-
-    #     job_result = self.wait_for_job(rq_id)
-    #     download_url = job_result.get("result_url")
-    #     if not download_url:
-    #         raise Exception("Job finished but no result_url found.")
-
-    #     if not download_url.startswith(("http://", "https://")):
-    #         download_url = f"{self.base_url}{download_url}"
-
-    #     self._download_file(download_url, output_file)
-
-    # def import_task(self, backup_file):
-    #     """Import a task from a backup."""
-    #     url = f"{self.api_url}/tasks/backup"
-    #     with open(backup_file, "rb") as f:
-    #         files = {"task_file": (Path(backup_file).name, f, "application/zip")}
-    #         response = self.session.post(url, files=files)
-    #     self._handle_error(response, f"Failed to import task from {backup_file}")
-
-    #     if response.status_code == 202:
-    #         rq_id = response.json().get("rq_id")
-    #         self.wait_for_job(rq_id)
-    #         print("Task import job finished.")
-    #     else:
-    #         print("Task import started.")
-
     def export_task_dataset(
-        self, task_id, output_file, format_name, save_images=True, only_manual=False
-    ):
+        self,
+        task_id: int,
+        output_file: str,
+        format_name: str,
+        save_images: bool = True,
+        only_manual: bool = False,
+    ) -> None:
         """Export a task's dataset."""
         url = f"{self.api_url}/tasks/{task_id}/dataset/export"
         params = {"format": format_name, "save_images": save_images}
@@ -471,28 +338,8 @@ class CVATApi:
 
         self._download_file(download_url, output_file)
 
-    # def import_annotations(self, task_id, annotations_file, format_name):
-    #     """Import annotations into a task."""
-    #     url = f"{self.api_url}/tasks/{task_id}/annotations/"
-    #     params = {"format": format_name}
 
-    #     with open(annotations_file, "rb") as f:
-    #         files = {"annotation_file": (Path(annotations_file).name, f)}
-    #         response = self.session.post(url, params=params, files=files)
-
-    #     self._handle_error(response, f"Failed to import annotations for task {task_id}")
-
-    #     if response.status_code == 202:  # Asynchronous
-    #         rq_id = response.json().get("rq_id")
-    #         if not rq_id:
-    #             raise Exception("Could not get request ID for annotation upload job.")
-    #         self.wait_for_job(rq_id)
-    #         print("Annotation upload job finished.")
-    #     elif response.status_code == 201:  # Synchronous
-    #         print("Annotations imported successfully.")
-
-
-def _get_api():
+def _get_api() -> CVATApi:
     load_dotenv()
     return CVATApi(
         os.getenv("CVAT_URL"),
@@ -502,29 +349,29 @@ def _get_api():
 
 
 @project_app.command("create")
-def project_create(name: str):
+def project_create(name: str) -> None:
     _get_api().create_project(name)
 
 
 @project_app.command("list")
-def project_list():
+def project_list() -> None:
     api = _get_api()
     print(TableFormatter.format_projects_table(api.list_projects()))
 
 
 @project_app.command("delete")
-def project_delete(project_id: int):
+def project_delete(project_id: int) -> None:
     _get_api().delete_project(project_id)
 
 
 @project_app.command("backup")
-def project_backup(project_id: int, output_file: Path):
+def project_backup(project_id: int, output_file: Path) -> None:
     _get_api().backup_project(project_id, str(output_file))
     print(output_file)
 
 
 @project_app.command("recreate")
-def project_recreate(input_file: Path):
+def project_recreate(input_file: Path) -> None:
     _get_api().import_project(str(input_file))
 
 
@@ -533,7 +380,7 @@ def project_import_dataset(
     project_id: Annotated[int, typer.Option("--project-id", "-u")],
     input_file: Annotated[Path, typer.Option("--input-file", "-i")],
     format_name: Annotated[str, typer.Option("--format", "-f", help="yolo or cvat")],
-):
+) -> None:
     if not input_file.is_file() or input_file.suffix.lower() != ".zip":
         print(
             f"Error: Input file must be a .zip file. Got: {input_file}", file=sys.stderr
@@ -556,7 +403,7 @@ def project_export_dataset(
     format_name: Annotated[str, typer.Option("--format", "-f")] = "YOLO 1.1",
     images: Annotated[bool, typer.Option("--images/--no-images")] = True,
     only_manual: bool = False,
-):
+) -> None:
     _get_api().export_project_dataset(
         project_id, str(output_file), format_name, images, only_manual
     )
@@ -570,7 +417,7 @@ def task_export_dataset(
     format_name: Annotated[str, typer.Option("--format", "-f")] = "YOLO 1.1",
     images: Annotated[bool, typer.Option("--images/--no-images")] = True,
     only_manual: bool = False,
-):
+) -> None:
     _get_api().export_task_dataset(
         task_id, str(output_file), format_name, images, only_manual
     )
