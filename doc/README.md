@@ -99,11 +99,11 @@ caah convert -i input.zip -o output.zip --from cvat --to yolo
 ### `data` command
 
 - **Action**: `split`
-    - **Description**: Split a YOLO dataset into training and validation sets.
-    - **Options**:
-      - `-d`, `--dataset` (required): Path to the input dataset zip file (YOLO 1.1 format).
-      - `-o`, `--output` (required): Path for the output dataset zip file.
-      - `-s`, `--split` (required): Train:Val split ratio (e.g., '80:20').
+  - **Description**: Split a YOLO dataset into training and validation sets.
+  - **Options**:
+    - `-d`, `--dataset` (required): Path to the input dataset zip file (YOLO 1.1 format).
+    - `-o`, `--output` (required): Path for the output dataset zip file.
+    - `-s`, `--split` (required): Train:Val split ratio (e.g., '80:20').
 
 ### `train` command
 
