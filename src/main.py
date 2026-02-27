@@ -1,70 +1,43 @@
-import argparse
 import os
 import sys
+from typing import Annotated, Optional
 
-import argcomplete
+import typer
 
-from annotate import add_annotate_arguments, run_annotate_task
-from converter import add_convert_arguments, run_convert
-from cvat import run_cvat, setup_cvat_parser
-from data_utils import setup_data_parser
-from train import add_train_arguments, run_train
+from annotate import annotate
+from converter import convert
+from cvat import cvat_app
+from data_utils import data_app
+from train import train
+from utils import CONTEXT_SETTINGS
+
+app = typer.Typer(
+    help="Cvat auto annotation helper.", context_settings=CONTEXT_SETTINGS
+)
+
+app.command(name="annotate")(annotate)
+app.command(name="convert")(convert)
+app.add_typer(cvat_app, name="cvat")
+app.command(name="train")(train)
+app.add_typer(data_app, name="data")
+
+
+@app.callback()
+def global_options(
+    stdout: Annotated[
+        bool,
+        typer.Option(
+            "--stdout",
+            help="Suppress all messages except the final output path to stdout.",
+        ),
+    ] = False,
+):
+    if stdout:
+        sys.stderr = open(os.devnull, "w")
 
 
 def main():
-    """
-    Main entry point for the command-line interface.
-    """
-    parser = argparse.ArgumentParser(description="Cvat auto annotation helper.")
-    subparsers = parser.add_subparsers(
-        dest="command", required=True, help="Available commands"
-    )
-    parser.add_argument(
-        "--stdout",
-        action="store_true",
-        help="Suppress all messages except the final output path to stdout.",
-    )
-
-    annotate_parser = subparsers.add_parser(
-        "annotate", help="Run auto-annotation on a CVAT task."
-    )
-    add_annotate_arguments(annotate_parser)
-    annotate_parser.set_defaults(func=run_annotate_task)
-
-    convert_parser = subparsers.add_parser(
-        "convert",
-        help="Convert dataset format locally.",
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
-    add_convert_arguments(convert_parser)
-    convert_parser.set_defaults(func=run_convert)
-
-    cvat_parser = subparsers.add_parser("cvat", help="Interact with a CVAT instance.")
-    setup_cvat_parser(cvat_parser)
-    cvat_parser.set_defaults(func=run_cvat)
-
-    train_parser = subparsers.add_parser("train", help="Train a YOLO model.")
-    add_train_arguments(train_parser)
-    train_parser.set_defaults(func=run_train)
-
-    data_parser = subparsers.add_parser("data", help="Dataset utilities.")
-    setup_data_parser(data_parser)
-    data_parser.set_defaults(
-        func=lambda args: (
-            args.func(args) if hasattr(args, "func") else data_parser.print_help()
-        )
-    )
-
-    argcomplete.autocomplete(parser)
-
-    args = parser.parse_args()
-    sys.stderr = open(os.devnull, "w") if args.stdout else sys.stderr
-
-    if hasattr(args, "func"):
-        args.func(args)
-    else:
-        parser.print_help()
-        sys.exit(1)
+    app()
 
 
 if __name__ == "__main__":

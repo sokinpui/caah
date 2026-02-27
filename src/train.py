@@ -1,10 +1,11 @@
-import argparse
 import os
 import sys
 import tempfile
 import zipfile
 from pathlib import Path
+from typing import Annotated, Optional
 
+import typer
 import yaml
 from dotenv import load_dotenv
 
@@ -118,80 +119,33 @@ def process_dataset_and_train(
         )
 
 
-def add_train_arguments(parser):
-    """
-    Adds training-specific arguments to the parser.
-    """
-    parser.add_argument(
-        "-d",
-        "--data",
-        type=str,
-        required=True,
-        help="Path to the zipped dataset file from CVAT ('Ultralytics YOLO' format).",
-    )
-    parser.add_argument(
-        "-m",
-        "--model",
-        type=str,
-        default="yolo11n",
-        help="Model version/size (e.g., yolo11n, yolo11s, yolov8m). Default: yolo11n",
-    )
-    parser.add_argument(
-        "-p",
-        "--path",
-        type=str,
-        help="Path to a custom local model file (.pt) to use as the base for training.",
-    )
-    parser.add_argument(
-        "-e",
-        "--epochs",
-        type=int,
-        default=50,
-        help="Number of training epochs. Default: 50",
-    )
-    parser.add_argument(
-        "--imgsz", type=int, default=640, help="Image size (pixels). Default: 640"
-    )
-    parser.add_argument(
-        "-b",
-        "--batch",
-        type=int,
-        default=16,
-        help="Batch size (reduce for GPU OOM errors). Default: 16",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="gpu",
-        help="Device to use: 'gpu', 'cpu', or a device ID like '0'. Default: 'gpu'",
-    )
-    parser.add_argument(
-        "-s",
-        "--split",
-        type=str,
-        default=None,
-        help="Train:Val split ratio (e.g., '80:20'). If provided, the dataset will be split before training.",
-    )
-    parser.add_argument(
-        "--network-drive",
-        action="store_true",
-        help="Use the NAS_PATH from .env as the image source. Labels will be taken from the provided zip.",
-    )
-
-
-def run_train(args):
+def train(
+    data: Annotated[str, typer.Option("--data", "-d", help="Zipped dataset path.")],
+    model: Annotated[
+        str, typer.Option("--model", "-m", help="YOLO model version.")
+    ] = "yolo11n",
+    path: Annotated[
+        Optional[str], typer.Option("--path", "-p", help="Custom model .pt path.")
+    ] = None,
+    epochs: Annotated[int, typer.Option("--epochs", "-e")] = 50,
+    imgsz: int = 640,
+    batch: Annotated[int, typer.Option("--batch", "-b")] = 16,
+    device: str = "gpu",
+    split: Annotated[Optional[str], typer.Option("--split", "-s")] = None,
+    network_drive: bool = False,
+):
     """
     Runs the training process with parsed arguments.
     """
     load_dotenv()
     try:
-        model_spec = args.path if args.path else args.model
+        model_spec = path if path else model
 
-        if not args.path and not model_spec.endswith(".pt"):
+        if not path and not model_spec.endswith(".pt"):
             model_spec += ".pt"
 
         nas_path = None
-        if args.network_drive:
+        if network_drive:
             nas_path = os.getenv("NAS_PATH")
             if not nas_path:
                 print(
@@ -200,13 +154,13 @@ def run_train(args):
                 sys.exit(1)
 
         process_dataset_and_train(
-            dataset_zip_path=args.data,
+            dataset_zip_path=data,
             model_spec=model_spec,
-            epochs=args.epochs,
-            img_size=args.imgsz,
-            batch_size=args.batch,
-            device=args.device,
-            split=args.split,
+            epochs=epochs,
+            img_size=imgsz,
+            batch_size=batch,
+            device=device,
+            split=split,
             nas_path=nas_path,
         )
     except FileNotFoundError as e:

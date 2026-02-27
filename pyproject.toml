@@ -22,10 +22,10 @@ dependencies = [
     "opencv-python",
     "tabulate",
     "torch",
-    "argcomplete",
     "datumaro",
     "cvat-sdk",
     "Pillow",
+    "typer",
 ]
 
 [project.urls]

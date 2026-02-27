@@ -4,60 +4,49 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
+from typing import Annotated
 
+import typer
 import yaml
 
+from utils import CONTEXT_SETTINGS
 
-def setup_data_parser(parser):
-    """Adds data utility subcommands to the parser."""
-    subparsers = parser.add_subparsers(
-        dest="action", required=True, help="Available data commands"
-    )
-
-    split_parser = subparsers.add_parser(
-        "split", help="Split a YOLO dataset into train and val sets."
-    )
-    split_parser.add_argument(
-        "-d", "--dataset", required=True, help="Path to the input dataset zip file."
-    )
-    split_parser.add_argument(
-        "-o", "--output", required=True, help="Path for the output dataset zip file."
-    )
-    split_parser.add_argument(
-        "-s",
-        "--split",
-        required=True,
-        help="Train:Val split ratio (e.g., '80:20').",
-    )
-    split_parser.set_defaults(func=run_data_split)
+data_app = typer.Typer(help="Dataset utilities.", context_settings=CONTEXT_SETTINGS)
 
 
-def run_data_split(args):
+@data_app.command("split")
+def run_data_split(
+    dataset: Annotated[
+        Path, typer.Option("--dataset", "-d", help="Path to dataset zip.")
+    ],
+    output: Annotated[
+        Path, typer.Option("--output", "-o", help="Path for output zip.")
+    ],
+    split_ratio: Annotated[
+        str, typer.Option("--split", "-s", help="Ratio (e.g., 80:20).")
+    ],
+):
     """Executes the split logic and zips the result."""
-    input_zip = Path(args.dataset)
-    output_zip = Path(args.output)
-
-    if not input_zip.is_file():
-        print(f"Error: Dataset not found at {input_zip}", file=sys.stderr)
+    if not dataset.is_file():
+        print(f"Error: Dataset not found at {dataset}", file=sys.stderr)
         sys.exit(1)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
-        extract_dir = tmpdir_path / "extracted"
-        split_dir = tmpdir_path / "split"
-        extract_dir.mkdir()
-        split_dir.mkdir()
+        extract_dir, split_dir = tmpdir_path / "extracted", tmpdir_path / "split"
+        for d in [extract_dir, split_dir]:
+            d.mkdir()
 
-        with zipfile.ZipFile(input_zip, "r") as zip_ref:
+        with zipfile.ZipFile(dataset, "r") as zip_ref:
             zip_ref.extractall(extract_dir)
 
-        split_dataset(extract_dir, split_dir, args.split)
+        split_dataset(extract_dir, split_dir, split_ratio)
 
-        with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zipf:
             for entry in split_dir.rglob("*"):
                 zipf.write(entry, entry.relative_to(split_dir))
 
-    print(output_zip)
+    print(output)
 
 
 def split_dataset(

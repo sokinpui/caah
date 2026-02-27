@@ -1,5 +1,7 @@
 import sys
 
+CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
+
 
 def resolve_device(device: str) -> str:
     """Resolves the device string to a valid torch/ultralytics device."""

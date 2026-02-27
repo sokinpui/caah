@@ -2,8 +2,8 @@ ultralytics
 python-dotenv
 requests
 tabulate
-argcomplete
 datumaro
 pyyaml
 cvat-sdk
 Pillow
+typer

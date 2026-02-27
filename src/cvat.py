@@ -1,13 +1,22 @@
-import argparse
 import json
 import os
 import shutil
 import sys
 import time
 from pathlib import Path
+from typing import Annotated, Optional
 
 import requests
+import typer
 from dotenv import load_dotenv
+
+from utils import CONTEXT_SETTINGS
+
+cvat_app = typer.Typer(help="CVAT operations.", context_settings=CONTEXT_SETTINGS)
+project_app = typer.Typer(help="Project operations.", context_settings=CONTEXT_SETTINGS)
+task_app = typer.Typer(help="Task operations.", context_settings=CONTEXT_SETTINGS)
+cvat_app.add_typer(project_app, name="project")
+cvat_app.add_typer(task_app, name="task")
 
 
 class TableFormatter:
@@ -483,214 +492,86 @@ class CVATApi:
     #         print("Annotations imported successfully.")
 
 
-def setup_cvat_parser(parser):
-    """Adds CVAT-specific subcommands to the parser."""
-    subparsers = parser.add_subparsers(dest="resource", required=True)
-    # Project parser
-    project_parser = subparsers.add_parser("project", help="Project operations")
-    project_subparsers = project_parser.add_subparsers(dest="action", required=True)
-    p_create = project_subparsers.add_parser("create", help="Create a project")
-    p_create.add_argument("-n", "--name", required=True, help="Name of the project")
-    p_backup = project_subparsers.add_parser("backup", help="Backup a project")
-    p_backup.add_argument(
-        "-u", "--project-id", required=True, type=int, help="Project ID"
-    )
-    p_backup.add_argument(
-        "-o", "--output-file", required=True, help="Path to save backup"
-    )
-    p_import = project_subparsers.add_parser(
-        "recreate", help="Recreate a project from backup"
-    )
-    p_import.add_argument(
-        "-i", "--input-file", required=True, help="Path to backup zip"
-    )
-    p_list = project_subparsers.add_parser("list", help="List projects")
-    p_delete = project_subparsers.add_parser("delete", help="Delete a project")
-    p_delete.add_argument(
-        "-u", "--project-id", required=True, type=int, help="Project ID"
-    )
-    p_import_ds = project_subparsers.add_parser(
-        "import_dataset", help="Import dataset into a project"
-    )
-    p_import_ds.add_argument(
-        "-u", "--project-id", required=True, type=int, help="Project ID"
-    )
-    p_import_ds.add_argument(
-        "-i", "--input-file", required=True, help="Path to dataset zip file"
-    )
-    p_import_ds.add_argument(
-        "-f",
-        "--format",
-        required=True,
-        choices=["yolo", "cvat"],
-        help="Dataset format ('yolo' or 'cvat').",
-    )
-    p_export_ds = project_subparsers.add_parser(
-        "export_dataset", help="Export dataset from a project"
-    )
-    p_export_ds.add_argument(
-        "-u", "--project-id", required=True, type=int, help="Project ID"
-    )
-    p_export_ds.add_argument(
-        "-o", "--output-file", required=True, help="Path to save dataset"
-    )
-    p_export_ds.add_argument(
-        "-f", "--format", default="YOLO 1.1", help="Dataset format"
-    )
-    p_export_ds.add_argument(
-        "--no-images",
-        dest="save_images",
-        action="store_false",
-        help="Do not include images in the export. Images are included by default.",
-    )
-    p_export_ds.add_argument(
-        "--only-manual",
-        dest="only_manual",
-        action="store_true",
-        help="Export only manual annotations, excluding auto-generated ones.",
-    )
-
-    # Task parser
-    task_parser = subparsers.add_parser("task", help="Task operations")
-    task_subparsers = task_parser.add_subparsers(dest="action", required=True)
-    # t_create = task_subparsers.add_parser("create", help="Create a task")
-    # t_create.add_argument("-n", "--name", required=True, help="Name of the task")
-    # t_create.add_argument(
-    #     "-u", "--project-id", type=int, help="Project ID to associate with"
-    # )
-    # t_attach = task_subparsers.add_parser("attach", help="Attach images to a task")
-    # t_attach.add_argument("-tid", "--task-id", required=True, type=int, help="Task ID")
-    # t_attach.add_argument(
-    #     "-i", "--images", nargs="+", required=True, help="Paths to images"
-    # )
-    # t_backup = task_subparsers.add_parser("backup", help="Backup a task")
-    # t_backup.add_argument("-tid", "--task-id", required=True, type=int, help="Task ID")
-    # t_backup.add_argument(
-    #     "-o", "--output-file", required=True, help="Path to save backup"
-    # )
-    # t_import = task_subparsers.add_parser(
-    #     "recreate", help="Recreate a task from backup"
-    # )
-    # t_import.add_argument(
-    #     "-i", "--input-file", required=True, help="Path to backup zip"
-    # )
-    # t_list = task_subparsers.add_parser("list", help="List tasks")
-    # t_delete = task_subparsers.add_parser("delete", help="Delete a task")
-    # t_delete.add_argument("-tid", "--task-id", required=True, type=int, help="Task ID")
-    t_export_ds = task_subparsers.add_parser(
-        "export_dataset", help="Export a task dataset"
-    )
-    t_export_ds.add_argument(
-        "-tid", "--task-id", required=True, type=int, help="Task ID"
-    )
-    t_export_ds.add_argument(
-        "-o", "--output-file", required=True, help="Path to save dataset"
-    )
-    t_export_ds.add_argument(
-        "-f", "--format", default="YOLO 1.1", help="Dataset format"
-    )
-    t_export_ds.add_argument(
-        "--no-images",
-        dest="save_images",
-        action="store_false",
-        help="Do not include images in the export.",
-    )
-    t_export_ds.add_argument(
-        "--only-manual",
-        dest="only_manual",
-        action="store_true",
-        help="Export only manual annotations, excluding auto-generated ones.",
-    )
-    # t_upload = task_subparsers.add_parser(
-    #     "import_annotations", help="Import annotations to a task"
-    # )
-    # t_upload.add_argument("-tid", "--task-id", required=True, type=int, help="Task ID")
-    # t_upload.add_argument(
-    #     "-i", "--input-file", required=True, help="Path to annotations file"
-    # )
-    # t_upload.add_argument(
-    #     "-f",
-    #     "--format",
-    #     required=True,
-    #     help="Annotation format name (e.g., 'CVAT 1.1')",
-    # )
-
-
-def run_cvat(args):
-    """
-    Executes the CVAT command based on parsed arguments.
-    """
+def _get_api():
     load_dotenv()
-    try:
-        api = CVATApi(
-            os.getenv("CVAT_URL"),
-            os.getenv("CVAT_USERNAME"),
-            os.getenv("CVAT_PASSWORD"),
+    return CVATApi(
+        os.getenv("CVAT_URL"),
+        os.getenv("CVAT_USERNAME"),
+        os.getenv("CVAT_PASSWORD"),
+    )
+
+
+@project_app.command("create")
+def project_create(name: str):
+    _get_api().create_project(name)
+
+
+@project_app.command("list")
+def project_list():
+    api = _get_api()
+    print(TableFormatter.format_projects_table(api.list_projects()))
+
+
+@project_app.command("delete")
+def project_delete(project_id: int):
+    _get_api().delete_project(project_id)
+
+
+@project_app.command("backup")
+def project_backup(project_id: int, output_file: Path):
+    _get_api().backup_project(project_id, str(output_file))
+    print(output_file)
+
+
+@project_app.command("recreate")
+def project_recreate(input_file: Path):
+    _get_api().import_project(str(input_file))
+
+
+@project_app.command("import_dataset")
+def project_import_dataset(
+    project_id: Annotated[int, typer.Option("--project-id", "-u")],
+    input_file: Annotated[Path, typer.Option("--input-file", "-i")],
+    format_name: Annotated[str, typer.Option("--format", "-f", help="yolo or cvat")],
+):
+    if not input_file.is_file() or input_file.suffix.lower() != ".zip":
+        print(
+            f"Error: Input file must be a .zip file. Got: {input_file}", file=sys.stderr
         )
-
-        if args.resource == "project":
-            if args.action == "create":
-                api.create_project(args.name)
-            elif args.action == "list":
-                print(TableFormatter.format_projects_table(api.list_projects()))
-            elif args.action == "delete":
-                api.delete_project(args.project_id)
-            elif args.action == "backup":
-                api.backup_project(args.project_id, args.output_file)
-                print(args.output_file)
-            elif args.action == "recreate":
-                api.import_project(args.input_file)
-            elif args.action == "import_dataset":
-                input_file = Path(args.input_file)
-                if not input_file.is_file() or input_file.suffix.lower() != ".zip":
-                    print(
-                        f"Error: Input file must be a .zip file. Got: {args.input_file}",
-                        file=sys.stderr,
-                    )
-                    sys.exit(1)
-
-                format_map = {
-                    "yolo": "YOLO 1.1",
-                    "cvat": "CVAT 1.1",
-                }
-                cvat_format = format_map.get(args.format.lower())
-                api.import_project_dataset(
-                    args.project_id, args.input_file, cvat_format
-                )
-            elif args.action == "export_dataset":
-                api.export_project_dataset(
-                    args.project_id,
-                    args.output_file,
-                    args.format,
-                    args.save_images,
-                    args.only_manual,
-                )
-                print(args.output_file)
-        elif args.resource == "task":
-            if args.action == "export_dataset":
-                api.export_task_dataset(
-                    args.task_id,
-                    args.output_file,
-                    args.format,
-                    args.save_images,
-                    args.only_manual,
-                )
-                print(args.output_file)
-
-        #     elif args.action == "import_annotations":
-        #         api.import_annotations(args.task_id, args.input_file, args.format)
-    except (requests.exceptions.RequestException, ValueError, Exception) as e:
-        print(f"An operation failed: {e}", file=sys.stderr)
         sys.exit(1)
 
+    format_map = {"yolo": "YOLO 1.1", "cvat": "CVAT 1.1"}
+    cvat_format = format_map.get(format_name.lower())
+    if not cvat_format:
+        print(f"Error: Unsupported format {format_name}", file=sys.stderr)
+        sys.exit(1)
 
-def main():
-    """Main function to run the CVAT API client."""
-    parser = argparse.ArgumentParser(description="CVAT REST API client.")
-    setup_cvat_parser(parser)
-    args = parser.parse_args()
-    run_cvat(args)
+    _get_api().import_project_dataset(project_id, str(input_file), cvat_format)
 
 
-if __name__ == "__main__":
-    main()
+@project_app.command("export_dataset")
+def project_export_dataset(
+    project_id: Annotated[int, typer.Option("--project-id", "-u")],
+    output_file: Annotated[Path, typer.Option("--output-file", "-o")],
+    format_name: Annotated[str, typer.Option("--format", "-f")] = "YOLO 1.1",
+    images: Annotated[bool, typer.Option("--images/--no-images")] = True,
+    only_manual: bool = False,
+):
+    _get_api().export_project_dataset(
+        project_id, str(output_file), format_name, images, only_manual
+    )
+    print(output_file)
+
+
+@task_app.command("export_dataset")
+def task_export_dataset(
+    task_id: Annotated[int, typer.Option("--task-id", "-tid")],
+    output_file: Annotated[Path, typer.Option("--output-file", "-o")],
+    format_name: Annotated[str, typer.Option("--format", "-f")] = "YOLO 1.1",
+    images: Annotated[bool, typer.Option("--images/--no-images")] = True,
+    only_manual: bool = False,
+):
+    _get_api().export_task_dataset(
+        task_id, str(output_file), format_name, images, only_manual
+    )
+    print(output_file)

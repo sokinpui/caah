@@ -1,68 +1,28 @@
-import argparse
 import sys
 import tempfile
 import zipfile
 from pathlib import Path
+from typing import Annotated
 
 import datumaro as dm
+import typer
 
 
-def add_convert_arguments(parser):
-    """Adds convert-specific arguments to the parser."""
-    parser.add_argument(
-        "-i", "--input-file", required=True, help="Path to input dataset zip file."
-    )
-    parser.add_argument(
-        "-o",
-        "--output-file",
-        required=True,
-        help="Path for the output dataset zip file.",
-    )
-    parser.add_argument(
-        "-f",
-        "--from",
-        dest="from_format",
-        required=True,
-        help=(
-            "Input dataset format. Common format codes include: "
-            "\n- `cvat`"
-            "\n- `yolo`"
-            "\n- `coco`"
-            "\n- `voc` (PASCAL VOC)"
-            "\n- `label_me`"
-            "\n- `tf_detection_api`"
-            "\n- `cityscapes`"
-            "\n- `imagenet`"
-            "For a full list, refer to Datumaro documentation."
-        ),
-    )
-    parser.add_argument(
-        "-t",
-        "--to",
-        dest="to_format",
-        required=True,
-        help=(
-            "Output dataset format. Common format codes include: "
-            "\n- `cvat`"
-            "\n- `yolo`"
-            "\n- `coco`"
-            "\n- `voc` (PASCAL VOC)"
-            "\n- `label_me`"
-            "\n- `tf_detection_api`"
-            "\n- `cityscapes`"
-            "\n- `imagenet`"
-            "For a full list, refer to Datumaro documentation."
-        ),
-    )
-
-
-def run_convert(args):
+def convert(
+    input_file: Annotated[
+        Path, typer.Option("--input-file", "-i", help="Input dataset zip.")
+    ],
+    output_file: Annotated[
+        Path, typer.Option("--output-file", "-o", help="Output dataset zip.")
+    ],
+    from_format: Annotated[
+        str, typer.Option("--from", "-f", help="Source format (e.g., cvat, yolo).")
+    ],
+    to_format: Annotated[str, typer.Option("--to", "-t", help="Target format.")],
+):
     """Converts a dataset from one format to another using Datumaro."""
-    input_zip = Path(args.input_file)
-    output_zip = Path(args.output_file)
-
-    if not input_zip.is_file():
-        print(f"Error: Input file not found at {input_zip}", file=sys.stderr)
+    if not input_file.is_file():
+        print(f"Error: Input file not found at {input_file}", file=sys.stderr)
         sys.exit(1)
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -72,18 +32,16 @@ def run_convert(args):
         input_dir.mkdir()
         output_dir.mkdir()
 
-        print(f"Extracting {input_zip} to temporary directory...", file=sys.stderr)
-        with zipfile.ZipFile(input_zip, "r") as zip_ref:
+        print(f"Extracting {input_file} to temporary directory...", file=sys.stderr)
+        with zipfile.ZipFile(input_file, "r") as zip_ref:
             zip_ref.extractall(input_dir)
 
         print(
-            f"Importing dataset from {input_dir} (format: {args.from_format})...",
+            f"Importing dataset from {input_dir} (format: {from_format})...",
             file=sys.stderr,
         )
         try:
-            dataset = dm.Dataset.import_from(
-                str(input_dir), format=args.from_format.lower()
-            )
+            dataset = dm.Dataset.import_from(str(input_dir), format=from_format.lower())
         except Exception as e:
             print(f"Error importing dataset: {e}", file=sys.stderr)
             print(
@@ -94,29 +52,14 @@ def run_convert(args):
             sys.exit(1)
 
         print(
-            f"Exporting dataset to {output_dir} (format: {args.to_format.lower()})...",
+            f"Exporting dataset to {output_dir} (format: {to_format.lower()})...",
             file=sys.stderr,
         )
-        dataset.export(str(output_dir), format=args.to_format.lower(), save_media=True)
+        dataset.export(str(output_dir), format=to_format.lower(), save_media=True)
 
-        print(f"Creating output zip file at {output_zip}...", file=sys.stderr)
-        with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+        print(f"Creating output zip file at {output_file}...", file=sys.stderr)
+        with zipfile.ZipFile(output_file, "w", zipfile.ZIP_DEFLATED) as zipf:
             for entry in output_dir.rglob("*"):
                 zipf.write(entry, entry.relative_to(output_dir))
 
-    print(output_zip)
-
-
-def main():
-    """Main function to run the converter script directly."""
-    parser = argparse.ArgumentParser(
-        description="Convert dataset format locally.",
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
-    add_convert_arguments(parser)
-    args = parser.parse_args()
-    run_convert(args)
-
-
-if __name__ == "__main__":
-    main()
+    print(output_file)
