@@ -32,6 +32,9 @@ def annotate(
         os.getenv("CVAT_USERNAME"),
         os.getenv("CVAT_PASSWORD"),
     )
+    nas_path_str = os.getenv("NAS_PATH")
+    nas_path = Path(nas_path_str) if nas_path_str else None
+
     if not all([url, user, password]):
         raise ValueError("CVAT credentials not found in environment variables.")
 
@@ -40,6 +43,11 @@ def annotate(
     with make_client(url, credentials=(user, password)) as client:
         print(f"Fetching task {task_id}...")
         task = client.tasks.retrieve(task_id)
+
+        # Fetch metadata to get original filenames for NAS optimization
+        meta = task.get_meta()
+        frame_filenames = {i: frame.name for i, frame in enumerate(meta.frames)}
+
         all_annotations = task.get_annotations()
 
         labels = task.get_labels()
@@ -52,6 +60,8 @@ def annotate(
         }
 
         print(f"Task has {task.size} frames. Starting inference...")
+        if nas_path:
+            print(f"NAS optimization enabled. Checking: {nas_path}")
 
         new_shapes = []
         dropped_ids = set()
@@ -63,8 +73,21 @@ def annotate(
                 if s.frame == frame_id and s.type.value == "rectangle"
             ]
 
-            image_bytes = task.get_frame(frame_id).read()
-            image_source = Image.open(io.BytesIO(image_bytes))
+            image_source = None
+            filename = frame_filenames.get(frame_id)
+
+            if nas_path and filename:
+                local_file = nas_path / filename
+                if local_file.exists():
+                    try:
+                        image_source = Image.open(local_file)
+                    except Exception:
+                        image_source = None
+
+            if image_source is None:
+                image_bytes = task.get_frame(frame_id).read()
+                image_source = Image.open(io.BytesIO(image_bytes))
+
             predictions = model.predict(image_source)
 
             for pred in predictions:
@@ -75,8 +98,13 @@ def annotate(
                 for exist in frame_existing:
                     if _calculate_ioa(pred["box"], exist.points) <= ioa:
                         continue
-                    
-                    if exist.source.value != "manual":
+
+                    exist_source = (
+                        exist.source.value
+                        if hasattr(exist.source, "value")
+                        else exist.source
+                    )
+                    if exist_source != "manual":
                         dropped_ids.add(exist.id)
 
                 l_id = label_map[class_name]
@@ -105,23 +133,31 @@ def annotate(
                 end="\r",
             )
 
-        kept_shapes = [
-            models.LabeledShapeRequest(**s.to_dict())
-            for s in all_annotations.shapes
-            if s.id not in dropped_ids
-        ]
+        def _clean_for_request(annotation_list, dropped_set, request_type):
+            cleaned = []
+            for item in annotation_list:
+                if item.id in dropped_set:
+                    continue
+                item_dict = item.to_dict()
+                item_dict.pop("id", None)
+                cleaned.append(request_type(**item_dict))
+            return cleaned
+
+        kept_shapes = _clean_for_request(
+            all_annotations.shapes, dropped_ids, models.LabeledShapeRequest
+        )
+        kept_tracks = _clean_for_request(
+            all_annotations.tracks, dropped_ids, models.LabeledTrackRequest
+        )
+        kept_tags = _clean_for_request(
+            all_annotations.tags, dropped_ids, models.LabeledImageRequest
+        )
 
         task.set_annotations(
             models.LabeledDataRequest(
                 shapes=kept_shapes + new_shapes,
-                tracks=[
-                    models.LabeledTrackRequest(**t.to_dict())
-                    for t in all_annotations.tracks
-                ],
-                tags=[
-                    models.LabeledImageRequest(**t.to_dict())
-                    for t in all_annotations.tags
-                ],
+                tracks=kept_tracks,
+                tags=kept_tags,
             )
         )
 
