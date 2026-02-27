@@ -22,6 +22,17 @@ app.command(name="train")(train)
 app.add_typer(data_app, name="data")
 
 
+@app.command()
+def server(
+    host: str = "0.0.0.0",
+    port: int = 8000,
+):
+    """Start the REST API server."""
+    import uvicorn
+
+    uvicorn.run("server:app", host=host, port=port, reload=True)
+
+
 @app.callback()
 def global_options(
     stdout: Annotated[

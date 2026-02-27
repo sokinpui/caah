@@ -25,6 +25,7 @@ For interacting with a CVAT server, create a `.env` file in the root directory o
 CVAT_URL=http://localhost:8080
 CVAT_USERNAME=your_username
 CVAT_PASSWORD=your_password
+NAS_PATH=/path/to/mount/nas
 ```
 
 # Usage
