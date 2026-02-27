@@ -2,7 +2,6 @@ import json
 import os
 import shutil
 import sys
-import time
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -79,8 +78,7 @@ class CVATApi:
     def _login(self, username: Optional[str], password: Optional[str]) -> None:
         """Authenticate and store session token."""
         if not username or not password:
-            print("Error: CVAT credentials missing.", file=sys.stderr)
-            sys.exit(1)
+            raise ValueError("CVAT credentials missing.")
 
         login_url = f"{self.api_url}/auth/login"
         try:
@@ -90,12 +88,9 @@ class CVATApi:
             response.raise_for_status()
             token = response.json()["key"]
             self.session.headers.update({"Authorization": f"Token {token}"})
-            print("Successfully logged in to CVAT.", file=sys.stderr)
+            print("Successfully logged in to CVAT.")
         except requests.exceptions.RequestException as e:
-            print(f"Login failed: {e}", file=sys.stderr)
-            if e.response is not None:
-                print(f"Response: {e.response.text}", file=sys.stderr)
-            sys.exit(1)
+            raise RuntimeError(f"Login failed: {e}")
 
     def _handle_error(self, response: requests.Response, message: str) -> None:
         """Generic error handler for API responses."""
@@ -111,15 +106,17 @@ class CVATApi:
 
     def wait_for_job(self, rq_id: str) -> dict:
         """Poll the status of an asynchronous job."""
+        import time
+
         request_url = f"{self.api_url}/requests/{rq_id}"
-        print(f"Waiting for job {rq_id} to complete...", file=sys.stderr)
+        print(f"Waiting for job {rq_id} to complete...")
         while True:
             response = self.session.get(request_url)
             self._handle_error(response, f"Failed to get job status for {rq_id}")
 
             data = response.json()
             status = data.get("status")
-            print(f"Job {rq_id} status: {status}", file=sys.stderr)
+            print(f"Job {rq_id} status: {status}")
 
             if status == "finished":
                 return data
@@ -134,12 +131,12 @@ class CVATApi:
 
     def _download_file(self, url: str, output_path: str) -> None:
         """Download a file with streaming."""
-        print(f"Downloading from {url} to {output_path}...", file=sys.stderr)
+        print(f"Downloading from {url} to {output_path}...")
         with self.session.get(url, stream=True) as r:
             self._handle_error(r, "File download failed")
             with open(output_path, "wb") as f:
                 shutil.copyfileobj(r.raw, f)
-        print("Download complete.", file=sys.stderr)
+        print("Download complete.")
 
     def get_task_metadata(self, task_id: int) -> dict:
         """Retrieve task metadata (labels, attributes)."""
@@ -175,10 +172,7 @@ class CVATApi:
         response = self.session.post(url, json={"name": name})
         self._handle_error(response, f"Failed to create project '{name}'")
         project_data = response.json()
-        print(
-            f"Successfully created project '{name}' with ID: {project_data['id']}",
-            file=sys.stderr,
-        )
+        print(f"Successfully created project '{name}' with ID: {project_data['id']}")
         return project_data
 
     def list_projects(self) -> dict:
@@ -194,7 +188,7 @@ class CVATApi:
         response = self.session.delete(url)
         if response.status_code != 204:
             self._handle_error(response, f"Failed to delete project {project_id}")
-        print(f"Project {project_id} deleted successfully.", file=sys.stderr)
+        print(f"Project {project_id} deleted successfully.")
 
     def backup_project(self, project_id: int, output_file: str) -> None:
         """Backup a project."""
@@ -234,9 +228,9 @@ class CVATApi:
         if response.status_code == 202:
             rq_id = response.json().get("rq_id")
             self.wait_for_job(rq_id)
-            print("Project import job finished.", file=sys.stderr)
+            print("Project import job finished.")
         else:
-            print("Project import started.", file=sys.stderr)
+            print("Project import started.")
 
     def export_project_dataset(
         self,
@@ -294,9 +288,9 @@ class CVATApi:
         if response.status_code == 202:
             rq_id = response.json().get("rq_id")
             self.wait_for_job(rq_id)
-            print("Dataset import job finished.", file=sys.stderr)
+            print("Dataset import job finished.")
         else:
-            print("Dataset import started.", file=sys.stderr)
+            print("Dataset import started.")
 
     def export_task_dataset(
         self,
@@ -382,16 +376,12 @@ def project_import_dataset(
     format_name: Annotated[str, typer.Option("--format", "-f", help="yolo or cvat")],
 ) -> None:
     if not input_file.is_file() or input_file.suffix.lower() != ".zip":
-        print(
-            f"Error: Input file must be a .zip file. Got: {input_file}", file=sys.stderr
-        )
-        sys.exit(1)
+        raise ValueError(f"Input file must be a .zip file. Got: {input_file}")
 
     format_map = {"yolo": "YOLO 1.1", "cvat": "CVAT 1.1"}
     cvat_format = format_map.get(format_name.lower())
     if not cvat_format:
-        print(f"Error: Unsupported format {format_name}", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError(f"Unsupported format {format_name}")
 
     _get_api().import_project_dataset(project_id, str(input_file), cvat_format)
 

@@ -1,6 +1,5 @@
 import io
 import os
-import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -25,21 +24,18 @@ def annotate(
     load_dotenv()
     model = _load_yolo_model(str(model_path), device)
 
-    url = os.getenv("CVAT_URL")
-    user = os.getenv("CVAT_USERNAME")
-    password = os.getenv("CVAT_PASSWORD")
-
+    url, user, password = (
+        os.getenv("CVAT_URL"),
+        os.getenv("CVAT_USERNAME"),
+        os.getenv("CVAT_PASSWORD"),
+    )
     if not all([url, user, password]):
-        print(
-            "Error: CVAT credentials not found in environment variables.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        raise ValueError("CVAT credentials not found in environment variables.")
 
-    print(f"Connecting to CVAT at {url}...", file=sys.stderr)
+    print(f"Connecting to CVAT at {url}...")
 
     with make_client(url, credentials=(user, password)) as client:
-        print(f"Fetching task {task_id}...", file=sys.stderr)
+        print(f"Fetching task {task_id}...")
         task = client.tasks.retrieve(task_id)
 
         labels = task.get_labels()
@@ -51,7 +47,7 @@ def annotate(
             if attr.name == "source"
         }
 
-        print(f"Task has {task.size} frames. Starting inference...", file=sys.stderr)
+        print(f"Task has {task.size} frames. Starting inference...")
 
         shapes_buffer = []
         BATCH_SIZE = 100
@@ -91,7 +87,6 @@ def annotate(
                 print(
                     f"Uploading batch of {len(shapes_buffer)} annotations...",
                     end="\r",
-                    file=sys.stderr,
                 )
                 task.update_annotations(
                     models.PatchedLabeledDataRequest(shapes=shapes_buffer)
@@ -101,7 +96,6 @@ def annotate(
             print(
                 f"Processed frame {frame_id+1}/{task.size}...",
                 end="\r",
-                file=sys.stderr,
             )
 
         if shapes_buffer:
@@ -109,17 +103,16 @@ def annotate(
                 models.PatchedLabeledDataRequest(shapes=shapes_buffer)
             )
 
-    print(f"\nDone. Annotated task {task_id}.", file=sys.stderr)
+    print(f"\nDone. Annotated task {task_id}.")
 
 
 def _load_yolo_model(model_path_str: str, device: str) -> YoloModel:
     """Loads a YOLO model, handling errors."""
     model_path = Path(model_path_str)
     if not model_path.exists():
-        print(f"Error: Model file not found at {model_path}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"Model file not found at {model_path}")
+
     try:
         return YoloModel(str(model_path), device=device)
     except Exception as e:
-        print(f"Error loading model: {e}", file=sys.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"Error loading model: {e}")

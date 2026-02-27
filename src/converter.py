@@ -1,4 +1,3 @@
-import sys
 import tempfile
 import zipfile
 from pathlib import Path
@@ -22,8 +21,7 @@ def convert(
 ):
     """Converts a dataset from one format to another using Datumaro."""
     if not input_file.is_file():
-        print(f"Error: Input file not found at {input_file}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"Input file not found at {input_file}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
@@ -32,32 +30,20 @@ def convert(
         input_dir.mkdir()
         output_dir.mkdir()
 
-        print(f"Extracting {input_file} to temporary directory...", file=sys.stderr)
+        print(f"Extracting {input_file} to temporary directory...")
         with zipfile.ZipFile(input_file, "r") as zip_ref:
             zip_ref.extractall(input_dir)
 
-        print(
-            f"Importing dataset from {input_dir} (format: {from_format})...",
-            file=sys.stderr,
-        )
+        print(f"Importing dataset from {input_dir} (format: {from_format})...")
         try:
             dataset = dm.Dataset.import_from(str(input_dir), format=from_format.lower())
         except Exception as e:
-            print(f"Error importing dataset: {e}", file=sys.stderr)
-            print(
-                "Files in extracted directory:",
-                [str(p.relative_to(input_dir)) for p in input_dir.rglob("*")],
-                file=sys.stderr,
-            )
-            sys.exit(1)
+            raise RuntimeError(f"Error importing dataset: {e}")
 
-        print(
-            f"Exporting dataset to {output_dir} (format: {to_format.lower()})...",
-            file=sys.stderr,
-        )
+        print(f"Exporting dataset to {output_dir} (format: {to_format.lower()})...")
         dataset.export(str(output_dir), format=to_format.lower(), save_media=True)
 
-        print(f"Creating output zip file at {output_file}...", file=sys.stderr)
+        print(f"Creating output zip file at {output_file}...")
         with zipfile.ZipFile(output_file, "w", zipfile.ZIP_DEFLATED) as zipf:
             for entry in output_dir.rglob("*"):
                 zipf.write(entry, entry.relative_to(output_dir))
