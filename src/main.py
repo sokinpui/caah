@@ -1,14 +1,12 @@
 import argparse
-import sys
 import os
+import sys
+
 import argcomplete
 
-from annotate import (
-    add_annotate_arguments,
-    run_annotate_task,
-)
-from cvat import run_cvat, setup_cvat_parser
+from annotate import add_annotate_arguments, run_annotate_task
 from converter import add_convert_arguments, run_convert
+from cvat import run_cvat, setup_cvat_parser
 from data_utils import setup_data_parser
 from train import add_train_arguments, run_train
 

@@ -1,9 +1,9 @@
 import argparse
-import tempfile
-import sys
-import zipfile
 import random
 import shutil
+import sys
+import tempfile
+import zipfile
 from pathlib import Path
 
 import yaml

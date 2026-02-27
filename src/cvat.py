@@ -1,9 +1,9 @@
 import argparse
+import json
 import os
 import shutil
 import sys
 import time
-import json
 from pathlib import Path
 
 import requests
@@ -284,9 +284,9 @@ class CVATApi:
         """Export a project's dataset."""
         url = f"{self.api_url}/projects/{project_id}/dataset/export"
         params = {"format": format_name, "save_images": save_images}
-        
+
         if only_manual:
-            # CVAT uses a JSON-based logic for filtering. 
+            # CVAT uses a JSON-based logic for filtering.
             # This filter ensures only annotations with source 'manual' are included.
             filter_logic = {"and": [{"==": [{"var": "source"}, "manual"]}]}
             params["filter"] = json.dumps(filter_logic)
@@ -527,7 +527,9 @@ def setup_cvat_parser(parser):
     p_export_ds.add_argument(
         "-o", "--output-file", required=True, help="Path to save dataset"
     )
-    p_export_ds.add_argument("-f", "--format", default="YOLO 1.1", help="Dataset format")
+    p_export_ds.add_argument(
+        "-f", "--format", default="YOLO 1.1", help="Dataset format"
+    )
     p_export_ds.add_argument(
         "--no-images",
         dest="save_images",
@@ -642,7 +644,11 @@ def run_cvat(args):
                 )
             elif args.action == "export_dataset":
                 api.export_project_dataset(
-                    args.project_id, args.output_file, args.format, args.save_images, args.only_manual
+                    args.project_id,
+                    args.output_file,
+                    args.format,
+                    args.save_images,
+                    args.only_manual,
                 )
                 print(args.output_file)
         # elif args.resource == "task":

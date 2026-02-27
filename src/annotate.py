@@ -45,7 +45,10 @@ def run_annotate_task(args):
     password = os.getenv("CVAT_PASSWORD")
 
     if not all([url, user, password]):
-        print("Error: CVAT credentials not found in environment variables.", file=sys.stderr)
+        print(
+            "Error: CVAT credentials not found in environment variables.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     print(f"Connecting to CVAT at {url}...", file=sys.stderr)
@@ -87,15 +90,17 @@ def run_annotate_task(args):
                         )
                     )
 
-                shapes_buffer.append(models.LabeledShapeRequest(
-                    type=models.ShapeType("rectangle"),
-                    frame=frame_id,
-                    label_id=l_id,
-                    points=pred["box"],
-                    rotation=0,
-                    attributes=attributes,
-                    source="auto",
-                ))
+                shapes_buffer.append(
+                    models.LabeledShapeRequest(
+                        type=models.ShapeType("rectangle"),
+                        frame=frame_id,
+                        label_id=l_id,
+                        points=pred["box"],
+                        rotation=0,
+                        attributes=attributes,
+                        source="auto",
+                    )
+                )
 
             if len(shapes_buffer) >= BATCH_SIZE:
                 print(
