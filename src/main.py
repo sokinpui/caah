@@ -49,6 +49,7 @@ def main():
 
     data_parser = subparsers.add_parser("data", help="Dataset utilities.")
     setup_data_parser(data_parser)
+    data_parser.set_defaults(func=lambda args: args.func(args) if hasattr(args, "func") else data_parser.print_help())
 
     argcomplete.autocomplete(parser)
 
