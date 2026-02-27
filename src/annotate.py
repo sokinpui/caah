@@ -50,7 +50,6 @@ def annotate(
         print(f"Task has {task.size} frames. Starting inference...")
 
         shapes_buffer = []
-        BATCH_SIZE = 100
 
         for frame_id in range(task.size):
             image_bytes = task.get_frame(frame_id).read()
@@ -82,16 +81,6 @@ def annotate(
                         source="auto",
                     )
                 )
-
-            if len(shapes_buffer) >= BATCH_SIZE:
-                print(
-                    f"Uploading batch of {len(shapes_buffer)} annotations...",
-                    end="\r",
-                )
-                task.update_annotations(
-                    models.PatchedLabeledDataRequest(shapes=shapes_buffer)
-                )
-                shapes_buffer = []
 
             print(
                 f"Processed frame {frame_id+1}/{task.size}...",
