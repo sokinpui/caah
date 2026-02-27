@@ -29,8 +29,11 @@ A wrapper for interacting with the CVAT REST API.
 # List all projects
 caah cvat project list
 
-# Export a project's dataset in YOLO format
-# Note: Use -u for project ID
+
+# Export a task's dataset
+caah cvat task export_dataset -tid 42 --format "YOLO 1.1" --output-file task_export.zip
+
+# Import a dataset into a project
 caah cvat project export_dataset -u 1 --format "YOLO 1.1" --output-file dataset_export.zip --only-manual
 
 # Import a dataset into a project
@@ -70,8 +73,18 @@ caah convert -i input.zip -o output.zip --from cvat --to yolo
 
 - `--stdout`: Suppress all messages except the final output path to stdout.
 
-### `annotate` command
 
+- **Resource**: `task`
+  - **Action**: `export_dataset`
+    - **Description**: Export all annotations and images from a task.
+    - **Options**:
+      - `-tid`, `--task-id` (required): ID of the task.
+      - `-o`, `--output-file` (required): Path to save dataset.
+      - `-f`, `--format`: Dataset format. Default: `YOLO 1.1`.
+      - `--no-images`: Do not include images in the export.
+      - `--only-manual`: Export only manual annotations.
+
+- **Resource**: `project`
 - **Description**: Run auto-annotation for a CVAT task.
 - **Options**:
   - `-m`, `--model` (required): Path to the YOLO model file (.pt).

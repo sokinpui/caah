@@ -427,33 +427,40 @@ class CVATApi:
     #     else:
     #         print("Task import started.")
 
-    # def export_task_dataset(self, task_id, output_file, format_name, save_images=False):
-    #     """Export a task's dataset."""
-    #     url = f"{self.api_url}/tasks/{task_id}/dataset/export"
-    #     params = {"format": format_name, "save_images": save_images}
-    #     response = self.session.post(url, params=params)
-    #     self._handle_error(
-    #         response, f"Failed to trigger dataset export for task {task_id}"
-    #     )
+    def export_task_dataset(
+        self, task_id, output_file, format_name, save_images=True, only_manual=False
+    ):
+        """Export a task's dataset."""
+        url = f"{self.api_url}/tasks/{task_id}/dataset/export"
+        params = {"format": format_name, "save_images": save_images}
 
-    #     if response.status_code != 202:
-    #         raise Exception(
-    #             f"Unexpected status code for export trigger: {response.status_code}\n{response.text}"
-    #         )
+        if only_manual:
+            filter_logic = {"and": [{"==": [{"var": "source"}, "manual"]}]}
+            params["filter"] = json.dumps(filter_logic)
 
-    #     rq_id = response.json().get("rq_id")
-    #     if not rq_id:
-    #         raise Exception("Could not get request ID for export job.")
+        response = self.session.post(url, params=params)
+        self._handle_error(
+            response, f"Failed to trigger dataset export for task {task_id}"
+        )
 
-    #     job_result = self.wait_for_job(rq_id)
-    #     download_url = job_result.get("result_url")
-    #     if not download_url:
-    #         raise Exception("Job finished but no result_url found.")
+        if response.status_code != 202:
+            raise Exception(
+                f"Unexpected status code for export trigger: {response.status_code}\n{response.text}"
+            )
 
-    #     if not download_url.startswith(("http://", "https://")):
-    #         download_url = f"{self.base_url}{download_url}"
+        rq_id = response.json().get("rq_id")
+        if not rq_id:
+            raise Exception("Could not get request ID for export job.")
 
-    #     self._download_file(download_url, output_file)
+        job_result = self.wait_for_job(rq_id)
+        download_url = job_result.get("result_url")
+        if not download_url:
+            raise Exception("Job finished but no result_url found.")
+
+        if not download_url.startswith(("http://", "https://")):
+            download_url = f"{self.base_url}{download_url}"
+
+        self._download_file(download_url, output_file)
 
     # def import_annotations(self, task_id, annotations_file, format_name):
     #     """Import annotations into a task."""
@@ -543,9 +550,9 @@ def setup_cvat_parser(parser):
         help="Export only manual annotations, excluding auto-generated ones.",
     )
 
-    # # Task parser
-    # task_parser = subparsers.add_parser("task", help="Task operations")
-    # task_subparsers = task_parser.add_subparsers(dest="action", required=True)
+    # Task parser
+    task_parser = subparsers.add_parser("task", help="Task operations")
+    task_subparsers = task_parser.add_subparsers(dest="action", required=True)
     # t_create = task_subparsers.add_parser("create", help="Create a task")
     # t_create.add_argument("-n", "--name", required=True, help="Name of the task")
     # t_create.add_argument(
@@ -570,22 +577,30 @@ def setup_cvat_parser(parser):
     # t_list = task_subparsers.add_parser("list", help="List tasks")
     # t_delete = task_subparsers.add_parser("delete", help="Delete a task")
     # t_delete.add_argument("-tid", "--task-id", required=True, type=int, help="Task ID")
-    # t_export_ds = task_subparsers.add_parser(
-    #     "export_dataset", help="Export a task dataset"
-    # )
-    # t_export_ds.add_argument(
-    #     "-tid", "--task-id", required=True, type=int, help="Task ID"
-    # )
-    # t_export_ds.add_argument(
-    #     "-o", "--output-file", required=True, help="Path to save dataset"
-    # )
-    # t_export_ds.add_argument("-f", "--format", required=True, help="Export format name")
-    # t_export_ds.add_argument(
-    #     "-s",
-    #     "--save-images",
-    #     action="store_true",
-    #     help="Include images in the export",
-    # )
+    t_export_ds = task_subparsers.add_parser(
+        "export_dataset", help="Export a task dataset"
+    )
+    t_export_ds.add_argument(
+        "-tid", "--task-id", required=True, type=int, help="Task ID"
+    )
+    t_export_ds.add_argument(
+        "-o", "--output-file", required=True, help="Path to save dataset"
+    )
+    t_export_ds.add_argument(
+        "-f", "--format", default="YOLO 1.1", help="Dataset format"
+    )
+    t_export_ds.add_argument(
+        "--no-images",
+        dest="save_images",
+        action="store_false",
+        help="Do not include images in the export.",
+    )
+    t_export_ds.add_argument(
+        "--only-manual",
+        dest="only_manual",
+        action="store_true",
+        help="Export only manual annotations, excluding auto-generated ones.",
+    )
     # t_upload = task_subparsers.add_parser(
     #     "import_annotations", help="Import annotations to a task"
     # )
@@ -651,23 +666,17 @@ def run_cvat(args):
                     args.only_manual,
                 )
                 print(args.output_file)
-        # elif args.resource == "task":
-        #     if args.action == "create":
-        #         api.create_task(args.name, args.project_id)
-        #     elif args.action == "attach":
-        #         api.attach_data_to_task(args.task_id, args.images)
-        #     elif args.action == "list":
-        #         print(TableFormatter.format_tasks_table(api.list_tasks()))
-        #     elif args.action == "delete":
-        #         api.delete_task(args.task_id)
-        #     elif args.action == "backup":
-        #         api.backup_task(args.task_id, args.output_file)
-        #     elif args.action == "recreate":
-        #         api.import_task(args.input_file)
-        #     elif args.action == "export_dataset":
-        #         api.export_task_dataset(
-        #             args.task_id, args.output_file, args.format, args.save_images
-        #         )
+        elif args.resource == "task":
+            if args.action == "export_dataset":
+                api.export_task_dataset(
+                    args.task_id,
+                    args.output_file,
+                    args.format,
+                    args.save_images,
+                    args.only_manual,
+                )
+                print(args.output_file)
+
         #     elif args.action == "import_annotations":
         #         api.import_annotations(args.task_id, args.input_file, args.format)
     except (requests.exceptions.RequestException, ValueError, Exception) as e:
