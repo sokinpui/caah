@@ -1,7 +1,8 @@
+import concurrent.futures
 import io
 import os
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any, Dict, List, Optional, Set, Tuple
 
 import typer
 from cvat_sdk import make_client
@@ -22,6 +23,12 @@ def annotate(
     ioa: Annotated[
         float, typer.Option(help="IoA threshold to drop old annotations.")
     ] = 0.5,
+    jobs: Annotated[
+        int, typer.Option("--jobs", "-j", help="Number of parallel jobs.")
+    ] = 4,
+    batch_size: Annotated[
+        int, typer.Option("--batch", "-b", help="Inference batch size.")
+    ] = 16,
 ) -> None:
     """Main execution flow for auto-annotation."""
     load_dotenv()
@@ -59,79 +66,46 @@ def annotate(
             if attr.name == "source"
         }
 
+        existing_by_frame = {}
+        for s in all_annotations.shapes:
+            if s.type.value == "rectangle":
+                existing_by_frame.setdefault(s.frame, []).append(s)
+
         print(f"Task has {task.size} frames. Starting inference...")
         if nas_path:
             print(f"NAS optimization enabled. Checking: {nas_path}")
 
-        new_shapes = []
-        dropped_ids = set()
+        new_shapes: List[models.LabeledShapeRequest] = []
+        dropped_ids: Set[int] = set()
 
-        for frame_id in range(task.size):
-            frame_existing = [
-                s
-                for s in all_annotations.shapes
-                if s.frame == frame_id and s.type.value == "rectangle"
-            ]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+            for batch_start in range(0, task.size, batch_size):
+                batch_end = min(batch_start + batch_size, task.size)
+                frame_ids = list(range(batch_start, batch_end))
 
-            image_source = None
-            filename = frame_filenames.get(frame_id)
+                # Parallel Fetch
+                images = list(executor.map(
+                    lambda fid: _get_frame_image(fid, task, frame_filenames.get(fid), nas_path),
+                    frame_ids
+                ))
 
-            if nas_path and filename:
-                local_file = nas_path / filename
-                if local_file.exists():
-                    try:
-                        image_source = Image.open(local_file)
-                    except Exception:
-                        image_source = None
+                # Batch Inference
+                batch_results = model.predict(images)
 
-            if image_source is None:
-                image_bytes = task.get_frame(frame_id).read()
-                image_source = Image.open(io.BytesIO(image_bytes))
-
-            predictions = model.predict(image_source)
-
-            for pred in predictions:
-                class_name = pred["label"]
-                if class_name not in label_map:
-                    continue
-
-                for exist in frame_existing:
-                    if _calculate_ioa(pred["box"], exist.points) <= ioa:
-                        continue
-
-                    exist_source = (
-                        exist.source.value
-                        if hasattr(exist.source, "value")
-                        else exist.source
+                # Post-process
+                for fid, frame_preds in zip(frame_ids, batch_results):
+                    f_shapes, f_dropped = _process_predictions(
+                        frame_id=fid,
+                        predictions=frame_preds,
+                        label_map=label_map,
+                        source_attr_map=source_attr_map,
+                        frame_existing=existing_by_frame.get(fid, []),
+                        ioa_threshold=ioa,
                     )
-                    if exist_source != "manual":
-                        dropped_ids.add(exist.id)
+                    new_shapes.extend(f_shapes)
+                    dropped_ids.update(f_dropped)
 
-                l_id = label_map[class_name]
-                attributes = []
-                if l_id in source_attr_map:
-                    attributes.append(
-                        models.AttributeValRequest(
-                            spec_id=source_attr_map[l_id], value="auto"
-                        )
-                    )
-
-                new_shapes.append(
-                    models.LabeledShapeRequest(
-                        type=models.ShapeType("rectangle"),
-                        frame=frame_id,
-                        label_id=l_id,
-                        points=pred["box"],
-                        rotation=0,
-                        attributes=attributes,
-                        source="auto",
-                    )
-                )
-
-            print(
-                f"Processed frame {frame_id+1}/{task.size}...",
-                end="\r",
-            )
+                print(f"Processed frame {batch_end}/{task.size}...", end="\r")
 
         def _clean_for_request(annotation_list, dropped_set, request_type):
             cleaned = []
@@ -162,6 +136,73 @@ def annotate(
         )
 
     print(f"\nDone. Annotated task {task_id}.")
+
+
+def _process_predictions(
+    frame_id: int,
+    predictions: List[Dict],
+    label_map: Dict[str, int],
+    source_attr_map: Dict[int, int],
+    frame_existing: List[Any],
+    ioa_threshold: float,
+) -> Tuple[List[models.LabeledShapeRequest], Set[int]]:
+    """Processes model output into CVAT requests."""
+    new_shapes = []
+    dropped_ids = set()
+
+    for pred in predictions:
+        class_name = pred["label"]
+        if class_name not in label_map:
+            continue
+
+        for exist in frame_existing:
+            if _calculate_ioa(pred["box"], exist.points) <= ioa_threshold:
+                continue
+
+            exist_source = (
+                exist.source.value if hasattr(exist.source, "value") else exist.source
+            )
+            if exist_source != "manual":
+                dropped_ids.add(exist.id)
+
+        l_id = label_map[class_name]
+        attributes = []
+        if l_id in source_attr_map:
+            attributes.append(
+                models.AttributeValRequest(spec_id=source_attr_map[l_id], value="auto")
+            )
+
+        new_shapes.append(
+            models.LabeledShapeRequest(
+                type=models.ShapeType("rectangle"),
+                frame=frame_id,
+                label_id=l_id,
+                points=pred["box"],
+                rotation=0,
+                attributes=attributes,
+                source="auto",
+            )
+        )
+
+    return new_shapes, dropped_ids
+
+
+def _get_frame_image(
+    frame_id: int, task: Any, filename: Optional[str], nas_path: Optional[Path]
+) -> Optional[Image.Image]:
+    """Retrieves image from NAS or CVAT API."""
+    if nas_path and filename:
+        local_file = nas_path / filename
+        if local_file.exists():
+            try:
+                return Image.open(local_file)
+            except Exception:
+                pass
+
+    try:
+        return Image.open(io.BytesIO(task.get_frame(frame_id).read()))
+    except Exception:
+        return None
 
 
 def _calculate_ioa(new_box: list[float], old_box: list[float]) -> float:

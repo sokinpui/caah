@@ -46,6 +46,7 @@ class AnnotateRequest(BaseModel):
     device: str = "cpu"
     conf: float = 0.25
     ioa: float = 0.5
+    jobs: int = 4
 
 
 # --- Helper Functions ---
@@ -158,7 +159,13 @@ def get_train_config():
 @app.post("/annotate/start")
 def start_annotate(req: AnnotateRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(
-        run_annotate, Path(req.model_path), req.task_id, req.device, req.conf, req.ioa
+        run_annotate,
+        Path(req.model_path),
+        req.task_id,
+        req.device,
+        req.conf,
+        req.ioa,
+        req.jobs,
     )
     return {"status": "annotation started"}
 

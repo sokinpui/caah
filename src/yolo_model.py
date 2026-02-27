@@ -1,6 +1,7 @@
+import threading
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Union, Optional
 
 from utils import resolve_device
 
@@ -20,49 +21,56 @@ class YoloModel:
         self.model = YOLO(model_path)
         self.device = resolve_device(device)
         self.labels = self.model.names
+        self._lock = threading.Lock()
         print(f"YOLO model loaded from {model_path}", file=sys.stderr)
         print(f"Using device: {self.device}", file=sys.stderr)
 
-    def predict(self, image_path: Path) -> List[Dict]:
+    def predict(self, image_source: Union[Path, Any, List[Any]]) -> Union[List[Dict], List[List[Dict]]]:
         """
-        Performs inference on a single image and returns annotations.
+        Performs inference on image(s) and returns annotations.
+        Supports batch processing if a list is provided.
         """
-        if isinstance(image_path, (str, Path)):
-            print(f"Predicting for image: {image_path}", file=sys.stderr)
+        is_batch = isinstance(image_source, list)
+        sources = image_source if is_batch else [image_source]
 
-        results = self.model(image_path, verbose=False, device=self.device)
+        # Filter out None values which might come from failed image fetches
+        valid_sources = [s for s in sources if s is not None]
+        if not valid_sources:
+            return [[]] * len(sources) if is_batch else []
 
-        annotations = []
+        with self._lock:
+            results = self.model(valid_sources, verbose=False, device=self.device)
 
-        # Results is a list, but for a single image it has one element
-        if not results:
-            return []
+        # Map results back to the original input indices (handling Nones)
+        all_annotations = []
+        result_idx = 0
+        
+        for src in sources:
+            if src is None:
+                all_annotations.append([])
+                continue
+            
+            res = results[result_idx]
+            result_idx += 1
+            
+            frame_preds = []
+            boxes = res.boxes
+            names = res.names
 
-        result = results[0]
-        boxes = result.boxes
-        names = result.names
+            for box in boxes:
+                xyxy = box.xyxy[0].cpu().numpy().tolist()
+                class_id = int(box.cls[0].cpu().numpy())
+                label = names[class_id]
+                box_coords = [int(coord) for coord in xyxy]
 
-        for box in boxes:
-            # Bounding box in xyxy format
-            xyxy = box.xyxy[0].cpu().numpy().tolist()
-            # Class index
-            class_id = int(box.cls[0].cpu().numpy())
-
-            # Get label name from class index
-            label = names[class_id]
-
-            # Convert box coordinates to integers
-            box_coords = [int(coord) for coord in xyxy]
-
-            annotations.append(
-                {
+                frame_preds.append({
                     "label": label,
                     "class_id": class_id,
                     "box": box_coords,
-                }
-            )
+                })
+            all_annotations.append(frame_preds)
 
-        return annotations
+        return all_annotations if is_batch else all_annotations[0]
 
     def get_image_size(self, image_path: Path) -> Tuple[int, int]:
         """
