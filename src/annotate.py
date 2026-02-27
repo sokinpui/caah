@@ -19,6 +19,9 @@ def annotate(
     task_id: Annotated[int, typer.Option("--task-id", help="CVAT Task ID.")],
     device: Annotated[str, typer.Option(help="Device (cpu, gpu).")] = "cpu",
     conf: Annotated[float, typer.Option(help="Confidence threshold.")] = 0.25,
+    ioa: Annotated[
+        float, typer.Option(help="IoA threshold to drop old annotations.")
+    ] = 0.5,
 ) -> None:
     """Main execution flow for auto-annotation."""
     load_dotenv()
@@ -37,6 +40,7 @@ def annotate(
     with make_client(url, credentials=(user, password)) as client:
         print(f"Fetching task {task_id}...")
         task = client.tasks.retrieve(task_id)
+        all_annotations = task.get_annotations()
 
         labels = task.get_labels()
         label_map = {l.name: l.id for l in labels}
@@ -49,9 +53,16 @@ def annotate(
 
         print(f"Task has {task.size} frames. Starting inference...")
 
-        shapes_buffer = []
+        new_shapes = []
+        dropped_ids = set()
 
         for frame_id in range(task.size):
+            frame_existing = [
+                s
+                for s in all_annotations.shapes
+                if s.frame == frame_id and s.type.value == "rectangle"
+            ]
+
             image_bytes = task.get_frame(frame_id).read()
             image_source = Image.open(io.BytesIO(image_bytes))
             predictions = model.predict(image_source)
@@ -60,6 +71,13 @@ def annotate(
                 class_name = pred["label"]
                 if class_name not in label_map:
                     continue
+
+                for exist in frame_existing:
+                    if _calculate_ioa(pred["box"], exist.points) <= ioa:
+                        continue
+                    
+                    if exist.source.value != "manual":
+                        dropped_ids.add(exist.id)
 
                 l_id = label_map[class_name]
                 attributes = []
@@ -70,7 +88,7 @@ def annotate(
                         )
                     )
 
-                shapes_buffer.append(
+                new_shapes.append(
                     models.LabeledShapeRequest(
                         type=models.ShapeType("rectangle"),
                         frame=frame_id,
@@ -87,12 +105,41 @@ def annotate(
                 end="\r",
             )
 
-        if shapes_buffer:
-            task.update_annotations(
-                models.PatchedLabeledDataRequest(shapes=shapes_buffer)
+        kept_shapes = [
+            models.LabeledShapeRequest(**s.to_dict())
+            for s in all_annotations.shapes
+            if s.id not in dropped_ids
+        ]
+
+        task.set_annotations(
+            models.LabeledDataRequest(
+                shapes=kept_shapes + new_shapes,
+                tracks=[
+                    models.LabeledTrackRequest(**t.to_dict())
+                    for t in all_annotations.tracks
+                ],
+                tags=[
+                    models.LabeledImageRequest(**t.to_dict())
+                    for t in all_annotations.tags
+                ],
             )
+        )
 
     print(f"\nDone. Annotated task {task_id}.")
+
+
+def _calculate_ioa(new_box: list[float], old_box: list[float]) -> float:
+    """Calculate Intersection over Area (IoA) relative to the old box."""
+    x_min, y_min = max(new_box[0], old_box[0]), max(new_box[1], old_box[1])
+    x_max, y_max = min(new_box[2], old_box[2]), min(new_box[3], old_box[3])
+
+    if x_max <= x_min or y_max <= y_min:
+        return 0.0
+
+    intersection_area = (x_max - x_min) * (y_max - y_min)
+    old_area = (old_box[2] - old_box[0]) * (old_box[3] - old_box[1])
+
+    return intersection_area / old_area if old_area > 0 else 0.0
 
 
 def _load_yolo_model(model_path_str: str, device: str) -> YoloModel:
