@@ -1,10 +1,12 @@
 import argparse
+import os
 import sys
 import tempfile
 import zipfile
 from pathlib import Path
 
 import yaml
+from dotenv import load_dotenv
 
 from data_utils import find_class_names, split_dataset
 from utils import resolve_device
@@ -33,6 +35,7 @@ def train_model(
     img_size: int,
     batch_size: int,
     device: str,
+    nas_path: str = None,
 ):
     """
     Initializes and trains the YOLO model.
@@ -54,6 +57,7 @@ def train_model(
         imgsz=img_size,
         batch=batch_size,
         device=resolved_device,
+        cache=nas_path is not None,  # Recommendation: cache when using network drive
         plots=True,
         save=True,
     )
@@ -71,6 +75,7 @@ def process_dataset_and_train(
     batch_size: int,
     device: str,
     split: str = None,
+    nas_path: str = None,
 ):
     """
     Extracts the dataset from a zip file and initiates the training process.
@@ -96,11 +101,21 @@ def process_dataset_and_train(
             print(f"Splitting dataset with ratio {split}...", file=sys.stderr)
             split_dir = tmpdir_path / "split"
             split_dir.mkdir()
-            data_yaml_path = split_dataset(extract_dir, split_dir, split)
+            data_yaml_path = split_dataset(
+                extract_dir, split_dir, split, nas_path=nas_path
+            )
         else:
             data_yaml_path = find_yaml_file(extract_dir)
 
-        train_model(data_yaml_path, model_spec, epochs, img_size, batch_size, device)
+        train_model(
+            data_yaml_path,
+            model_spec,
+            epochs,
+            img_size,
+            batch_size,
+            device,
+            nas_path=nas_path,
+        )
 
 
 def add_train_arguments(parser):
@@ -157,17 +172,32 @@ def add_train_arguments(parser):
         default=None,
         help="Train:Val split ratio (e.g., '80:20'). If provided, the dataset will be split before training.",
     )
+    parser.add_argument(
+        "--network-drive",
+        action="store_true",
+        help="Use the NAS_PATH from .env as the image source. Labels will be taken from the provided zip.",
+    )
 
 
 def run_train(args):
     """
     Runs the training process with parsed arguments.
     """
+    load_dotenv()
     try:
         model_spec = args.path if args.path else args.model
 
         if not args.path and not model_spec.endswith(".pt"):
             model_spec += ".pt"
+
+        nas_path = None
+        if args.network_drive:
+            nas_path = os.getenv("NAS_PATH")
+            if not nas_path:
+                print(
+                    "Error: --network-drive requires NAS_PATH in .env", file=sys.stderr
+                )
+                sys.exit(1)
 
         process_dataset_and_train(
             dataset_zip_path=args.data,
@@ -177,6 +207,7 @@ def run_train(args):
             batch_size=args.batch,
             device=args.device,
             split=args.split,
+            nas_path=nas_path,
         )
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)

@@ -60,7 +60,9 @@ def run_data_split(args):
     print(output_zip)
 
 
-def split_dataset(source_dir: Path, dest_dir: Path, split_str: str) -> Path:
+def split_dataset(
+    source_dir: Path, dest_dir: Path, split_str: str, nas_path: str = None
+) -> Path:
     """Splits files from source_dir into train/val sets in dest_dir."""
     try:
         train_ratio_str, val_ratio_str = split_str.split(":")
@@ -70,40 +72,60 @@ def split_dataset(source_dir: Path, dest_dir: Path, split_str: str) -> Path:
         sys.exit(1)
 
     image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
-    image_paths = [
-        p for p in source_dir.rglob("*") if p.suffix.lower() in image_extensions
-    ]
 
-    if not image_paths:
-        print("Error: No images found to split.", file=sys.stderr)
+    labels_root = (
+        source_dir / "obj_train_data"
+        if (source_dir / "obj_train_data").is_dir()
+        else source_dir
+    )
+    search_dir = Path(nas_path) if nas_path else labels_root
+
+    label_paths = list(labels_root.rglob("*.txt"))
+
+    image_label_pairs = []
+    for lp in label_paths:
+        rel_lp = lp.relative_to(labels_root)
+        for ext in image_extensions:
+            img_p = search_dir / rel_lp.with_suffix(ext)
+            if img_p.exists():
+                image_label_pairs.append((img_p, lp))
+                break
+
+    if not image_label_pairs:
+        print(f"Error: No matching images found in {search_dir}.", file=sys.stderr)
         sys.exit(1)
 
     class_names = find_class_names(source_dir)
-    random.shuffle(image_paths)
-    split_idx = int(len(image_paths) * train_frac)
+    random.shuffle(image_label_pairs)
+    split_idx = int(len(image_label_pairs) * train_frac)
 
     _copy_split_files(
-        image_paths[:split_idx],
+        image_label_pairs[:split_idx],
         dest_dir / "images" / "train",
         dest_dir / "labels" / "train",
+        only_labels=bool(nas_path),
     )
     _copy_split_files(
-        image_paths[split_idx:],
+        image_label_pairs[split_idx:],
         dest_dir / "images" / "val",
         dest_dir / "labels" / "val",
+        only_labels=bool(nas_path),
     )
 
     yaml_path = dest_dir / "data.yaml"
+    yaml_data = {
+        "train": "images/train",
+        "val": "images/val",
+        "names": {i: name for i, name in enumerate(class_names)},
+    }
+
+    # If using NAS, we point the base path to the NAS, but labels are local.
+    # However, Ultralytics expects images/ and labels/ to be siblings.
+    # So we keep paths relative to the temp 'split' directory.
+
     with open(yaml_path, "w") as f:
-        yaml.dump(
-            {
-                "train": "./images/train",
-                "val": "./images/val",
-                "names": {i: name for i, name in enumerate(class_names)},
-            },
-            f,
-            sort_keys=False,
-        )
+        yaml.dump(yaml_data, f, sort_keys=False)
+
     return yaml_path
 
 
@@ -115,7 +137,11 @@ def find_class_names(extracted_path: Path) -> list[str]:
             data = yaml.safe_load(f)
             if "names" in data:
                 names = data["names"]
-                return names if isinstance(names, list) else [n for i, n in sorted(names.items())]
+                return (
+                    names
+                    if isinstance(names, list)
+                    else [n for i, n in sorted(names.items())]
+                )
 
     names_files = list(extracted_path.glob("**/*.names"))
     if names_files:
@@ -124,11 +150,14 @@ def find_class_names(extracted_path: Path) -> list[str]:
     raise FileNotFoundError("Could not find class names file (*.yaml or *.names).")
 
 
-def _copy_split_files(image_list, img_dest, lbl_dest):
+def _copy_split_files(pairs, img_dest, lbl_dest, only_labels=False):
     img_dest.mkdir(parents=True, exist_ok=True)
     lbl_dest.mkdir(parents=True, exist_ok=True)
-    for img_path in image_list:
-        lbl_path = img_path.with_suffix(".txt")
-        if lbl_path.exists():
+    for img_path, lbl_path in pairs:
+        # If using NAS, we don't copy images, we symlink them so YOLO can find them
+        if only_labels:
+            (img_dest / img_path.name).symlink_to(img_path)
+        else:
             shutil.copy(img_path, img_dest / img_path.name)
-            shutil.copy(lbl_path, lbl_dest / lbl_path.name)
+
+        shutil.copy(lbl_path, lbl_dest / lbl_path.name)
