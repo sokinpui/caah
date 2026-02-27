@@ -79,7 +79,7 @@ read -r conf_threshold
 
 echo ""
 echo "Annotating CVAT Task $task_id using model at $model_path..."
-caah-cmd annotate-online -m "$model_path" --task-id "$task_id" --device "$device" --conf "$conf_threshold"
+caah-cmd annotate -m "$model_path" --task-id "$task_id" --device "$device" --conf "$conf_threshold"
 
 echo ""
 echo "Annotation complete. Results are live in CVAT."

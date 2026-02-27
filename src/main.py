@@ -3,9 +3,9 @@ import sys
 import os
 import argcomplete
 
-from annotator import (
-    add_annotate_online_arguments,
-    run_annotate_online,
+from annotate import (
+    add_annotate_arguments,
+    run_annotate_task,
 )
 from cvat import run_cvat, setup_cvat_parser
 from converter import add_convert_arguments, run_convert
@@ -27,11 +27,11 @@ def main():
         help="Suppress all messages except the final output path to stdout.",
     )
 
-    annotate_online_parser = subparsers.add_parser(
-        "annotate-online", help="Run online auto-annotation."
+    annotate_parser = subparsers.add_parser(
+        "annotate", help="Run auto-annotation on a CVAT task."
     )
-    add_annotate_online_arguments(annotate_online_parser)
-    annotate_online_parser.set_defaults(func=run_annotate_online)
+    add_annotate_arguments(annotate_parser)
+    annotate_parser.set_defaults(func=run_annotate_task)
 
     convert_parser = subparsers.add_parser(
         "convert",

@@ -40,7 +40,7 @@ caah = "main:main"
 package-dir = {"" = "src"}
 py-modules = [
     "main",
-    "annotator",
+    "annotate",
     "cvat",
     "yolo_model",
     "annotate_online",
