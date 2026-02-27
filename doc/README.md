@@ -46,6 +46,9 @@ Trains a YOLO model using a zipped dataset (typically exported from CVAT).
 ```bash
 # Train a YOLO11n model for 100 epochs
 caah train --data dataset.zip --model yolo11n --epochs 100 --device 0 --split 80:20
+
+# Train using a custom local model as base
+caah train --data dataset.zip --path ./weights/best.pt --epochs 50
 ```
 
 ### `convert` command
@@ -111,6 +114,7 @@ caah convert -i input.zip -o output.zip --from cvat --to yolo
 - **Options**:
   - `-d`, `--data` (required): Path to the zipped dataset file.
   - `-m`, `--model`: YOLO model version (e.g., yolo11n). Default: `yolo11n`.
+  - `-p`, `--path`: Path to a custom local model file (.pt).
   - `-e`, `--epochs`: Number of training epochs. Default: `50`.
   - `--imgsz`: Input image size. Default: `640`.
   - `-b`, `--batch`: Batch size. Default: `16`.

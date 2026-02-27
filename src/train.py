@@ -7,25 +7,7 @@ from pathlib import Path
 import yaml
 
 from data_utils import find_class_names, split_dataset
-
-
-def _resolve_device(device: str) -> str:
-    """Resolves the device string to a valid torch/ultralytics device."""
-    import torch
-
-    if device == "cpu":
-        return "cpu"
-    if device == "gpu":
-        if torch.cuda.is_available():
-            return "cuda"
-        if torch.backends.mps.is_available():
-            return "mps"
-        print(
-            "Warning: GPU requested but not available. Falling back to CPU.",
-            file=sys.stderr,
-        )
-        return "cpu"
-    return device
+from utils import resolve_device
 
 
 def find_yaml_file(directory: Path) -> Path:
@@ -46,7 +28,7 @@ def find_yaml_file(directory: Path) -> Path:
 
 def train_model(
     data_yaml_path: Path,
-    model_size: str,
+    model_spec: str,
     epochs: int,
     img_size: int,
     batch_size: int,
@@ -58,14 +40,13 @@ def train_model(
     print("--- Starting Training ---", file=sys.stderr)
     from ultralytics import YOLO
 
-    resolved_device = _resolve_device(device)
+    resolved_device = resolve_device(device)
 
     print(f"Data: {data_yaml_path}", file=sys.stderr)
-    print(f"Model: {model_size}", file=sys.stderr)
+    print(f"Model: {model_spec}", file=sys.stderr)
     print(f"Epochs: {epochs}", file=sys.stderr)
 
-    model_name = f"{model_size}.pt"
-    model = YOLO(model_name)
+    model = YOLO(model_spec)
 
     results = model.train(
         data=str(data_yaml_path),
@@ -84,7 +65,7 @@ def train_model(
 
 def process_dataset_and_train(
     dataset_zip_path: str,
-    model_size: str,
+    model_spec: str,
     epochs: int,
     img_size: int,
     batch_size: int,
@@ -119,7 +100,7 @@ def process_dataset_and_train(
         else:
             data_yaml_path = find_yaml_file(extract_dir)
 
-        train_model(data_yaml_path, model_size, epochs, img_size, batch_size, device)
+        train_model(data_yaml_path, model_spec, epochs, img_size, batch_size, device)
 
 
 def add_train_arguments(parser):
@@ -139,6 +120,12 @@ def add_train_arguments(parser):
         type=str,
         default="yolo11n",
         help="Model version/size (e.g., yolo11n, yolo11s, yolov8m). Default: yolo11n",
+    )
+    parser.add_argument(
+        "-p",
+        "--path",
+        type=str,
+        help="Path to a custom local model file (.pt) to use as the base for training.",
     )
     parser.add_argument(
         "-e",
@@ -177,9 +164,14 @@ def run_train(args):
     Runs the training process with parsed arguments.
     """
     try:
+        model_spec = args.path if args.path else args.model
+
+        if not args.path and not model_spec.endswith(".pt"):
+            model_spec += ".pt"
+
         process_dataset_and_train(
             dataset_zip_path=args.data,
-            model_size=args.model,
+            model_spec=model_spec,
             epochs=args.epochs,
             img_size=args.imgsz,
             batch_size=args.batch,

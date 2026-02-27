@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from utils import resolve_device
 
 
 class YoloModel:
@@ -8,7 +9,6 @@ class YoloModel:
     """
 
     def __init__(self, model_path: str, device: str = "gpu"):
-        import torch
         from ultralytics import YOLO
 
         model_file = Path(model_path)
@@ -16,27 +16,10 @@ class YoloModel:
             raise FileNotFoundError(f"Model path does not exist: {model_path}")
 
         self.model = YOLO(model_path)
-        self.device = self._resolve_device(device)
+        self.device = resolve_device(device)
         self.labels = self.model.names
         print(f"YOLO model loaded from {model_path}", file=sys.stderr)
         print(f"Using device: {self.device}", file=sys.stderr)
-
-    def _resolve_device(self, device: str) -> str:
-        import torch
-
-        if device == "cpu":
-            return "cpu"
-        if device == "gpu":
-            if torch.cuda.is_available():
-                return "cuda"
-            if torch.backends.mps.is_available():
-                return "mps"
-            print(
-                "Warning: GPU requested but not available. Falling back to CPU.",
-                file=sys.stderr,
-            )
-            return "cpu"
-        return device
 
     def predict(self, image_path: Path) -> list[dict]:
         """

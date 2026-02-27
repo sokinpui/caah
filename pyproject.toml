@@ -48,4 +48,5 @@ py-modules = [
     "train",
     "converter",
     "data_utils",
+    "utils",
 ]
