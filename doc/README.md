@@ -8,15 +8,15 @@ To see all available commands and global options, run:
 caah --help
 ```
 
-### `annotate-online` command
+### `annotate` command
 
-Connects to a CVAT server, annotates a task's images, and uploads the results directly. This is efficient as it avoids transferring image files.
+Connects to a CVAT server, performs inference on task frames using a YOLO model, and uploads the results directly as annotations.
 
 #### Example
 
 ```bash
 # Annotate task ID 42 using a local YOLO model
-caah annotate-online --model ./weights/best.pt --task-id 42 --device gpu --conf 0.3
+caah annotate --model ./weights/best.pt --task-id 42 --device gpu --conf 0.3
 ```
 
 ### `cvat` command
@@ -33,7 +33,7 @@ caah cvat project list
 # Note: Use -u for project ID
 caah cvat project export_dataset -u 1 --format "YOLO 1.1" --output-file dataset_export.zip --only-manual
 
-# Import a dataset into a project (formats: yolo, cvat)
+# Import a dataset into a project
 caah cvat project import_dataset -u 1 --input-file /path/to/dataset.zip --format yolo
 ```
 
@@ -67,7 +67,7 @@ caah convert -i input.zip -o output.zip --from cvat --to yolo
 
 - `--stdout`: Suppress all messages except the final output path to stdout.
 
-### `annotate-online` command
+### `annotate` command
 
 - **Description**: Run auto-annotation for a CVAT task.
 - **Options**:
