@@ -1,52 +1,10 @@
 import random
 import shutil
 import sys
-import tempfile
-import zipfile
 from pathlib import Path
-from typing import Annotated, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
-import typer
 import yaml
-
-from utils import CONTEXT_SETTINGS
-
-data_app = typer.Typer(help="Dataset utilities.", context_settings=CONTEXT_SETTINGS)
-
-
-@data_app.command("split")
-def run_data_split(
-    dataset: Annotated[
-        Path, typer.Option("--dataset", "-d", help="Path to dataset zip.")
-    ],
-    output: Annotated[
-        Path, typer.Option("--output", "-o", help="Path for output zip.")
-    ],
-    split_ratio: Annotated[
-        str, typer.Option("--split", "-s", help="Ratio (e.g., 80:20).")
-    ],
-):
-    """Executes the split logic and zips the result."""
-    if not dataset.is_file():
-        print(f"Error: Dataset not found at {dataset}", file=sys.stderr)
-        sys.exit(1)
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir_path = Path(tmpdir)
-        extract_dir, split_dir = tmpdir_path / "extracted", tmpdir_path / "split"
-        for d in [extract_dir, split_dir]:
-            d.mkdir()
-
-        with zipfile.ZipFile(dataset, "r") as zip_ref:
-            zip_ref.extractall(extract_dir)
-
-        split_dataset(extract_dir, split_dir, split_ratio)
-
-        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for entry in split_dir.rglob("*"):
-                zipf.write(entry, entry.relative_to(split_dir))
-
-    print(output)
 
 
 def split_dataset(

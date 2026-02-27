@@ -5,9 +5,7 @@ from typing import Annotated, Optional
 import typer
 
 from annotate import annotate
-from converter import convert
 from cvat import cvat_app
-from data_utils import data_app
 from train import train
 from utils import CONTEXT_SETTINGS
 
@@ -16,10 +14,8 @@ app = typer.Typer(
 )
 
 app.command(name="annotate")(annotate)
-app.command(name="convert")(convert)
 app.add_typer(cvat_app, name="cvat")
 app.command(name="train")(train)
-app.add_typer(data_app, name="data")
 
 
 @app.command()

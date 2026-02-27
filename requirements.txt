@@ -2,7 +2,6 @@ ultralytics
 python-dotenv
 requests
 tabulate
-datumaro
 pyyaml
 cvat-sdk
 Pillow

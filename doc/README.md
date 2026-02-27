@@ -73,7 +73,6 @@ caah convert -i input.zip -o output.zip --from cvat --to yolo
 
 - `--stdout`: Suppress all messages except the final output path to stdout.
 
-
 - **Resource**: `task`
   - **Action**: `export_dataset`
     - **Description**: Export all annotations and images from a task.
@@ -83,16 +82,6 @@ caah convert -i input.zip -o output.zip --from cvat --to yolo
       - `-f`, `--format`: Dataset format. Default: `YOLO 1.1`.
       - `--no-images`: Do not include images in the export.
       - `--only-manual`: Export only manual annotations.
-
-- **Resource**: `project`
-- **Description**: Run auto-annotation for a CVAT task.
-- **Options**:
-  - `-m`, `--model` (required): Path to the YOLO model file (.pt).
-  - `--task-id` (required): The ID of the task in CVAT.
-  - `--device`: Device to run inference on (cpu, gpu). Default: `cpu`.
-  - `--conf`: Confidence threshold for predictions. Default: `0.25`.
-
-### `cvat` command
 
 - **Resource**: `project`
   - **Action**: `list`
@@ -111,15 +100,6 @@ caah convert -i input.zip -o output.zip --from cvat --to yolo
       - `-f`, `--format`: Dataset format. Default: `YOLO 1.1`.
       - `--no-images`: Do not include images in the export.
       - `--only-manual`: Export only manual annotations.
-
-### `data` command
-
-- **Action**: `split`
-  - **Description**: Split a YOLO dataset into training and validation sets.
-  - **Options**:
-    - `-d`, `--dataset` (required): Path to the input dataset zip file (YOLO 1.1 format).
-    - `-o`, `--output` (required): Path for the output dataset zip file.
-    - `-s`, `--split` (required): Train:Val split ratio (e.g., '80:20').
 
 ### `train` command
 
