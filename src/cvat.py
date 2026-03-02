@@ -364,8 +364,8 @@ def project_backup(project_id: int, output_file: Path) -> None:
     print(output_file)
 
 
-@project_app.command("recreate")
-def project_recreate(input_file: Path) -> None:
+@project_app.command("import")
+def project_import(input_file: Path) -> None:
     _get_api().import_project(str(input_file))
 
 

@@ -29,18 +29,21 @@ A wrapper for interacting with the CVAT REST API.
 # List all projects
 caah cvat project list
 
+# List all projects
+caah cvat project list
 
-# Export a task's dataset
-caah cvat task export_dataset -tid 42 --format "YOLO 1.1" --output-file task_export.zip
-
-# Import a dataset into a project
+# Export a project's dataset
 caah cvat project export_dataset -u 1 --format "YOLO 1.1" --output-file dataset_export.zip --only-manual
 
 # Import a dataset into a project
 caah cvat project import_dataset -u 1 --input-file /path/to/dataset.zip --format yolo
-```
 
-### `train` command
+# Import a project from a backup
+caah cvat project import my_project_backup.zip
+
+
+# Import a dataset into a project
+caah cvat project import_dataset -u 1 --input-file /path/to/dataset.zip --format yolo
 
 Trains a YOLO model using a zipped dataset (typically exported from CVAT).
 
