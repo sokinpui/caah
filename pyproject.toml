@@ -26,7 +26,8 @@ dependencies = [
     "cvat-sdk",
     "Pillow",
     "pyyaml",
-    "typer"
+    "typer",
+    "sahi"
 ]
 
 [project.urls]
