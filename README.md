@@ -26,6 +26,10 @@ CVAT_URL=http://localhost:8080
 CVAT_USERNAME=your_username
 CVAT_PASSWORD=your_password
 NAS_PATH=/path/to/mount/nas
+
+CVAT_URL_2=http://old-cvat:8080
+CVAT_USERNAME_2=old_username
+CVAT_PASSWORD_2=old_password
 ```
 
 # Usage

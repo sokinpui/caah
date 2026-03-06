@@ -6,6 +6,7 @@ import typer
 
 from annotate import annotate
 from cvat import cvat_app
+from migrate import migrate_app
 from train import train
 from utils import CONTEXT_SETTINGS
 
@@ -15,6 +16,7 @@ app = typer.Typer(
 
 app.command(name="annotate")(annotate)
 app.add_typer(cvat_app, name="cvat")
+app.add_typer(migrate_app, name="migrate")
 app.command(name="train")(train)
 
 
