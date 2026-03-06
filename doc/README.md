@@ -15,7 +15,7 @@ Connects to a CVAT server, performs inference on task frames using a YOLO model,
 #### Example
 
 ```bash
-# Annotate task ID 42 using a local YOLO model
+# Annotate task ID 42 using a local YOLO model with 16-frame batching
 caah annotate --model ./weights/best.pt --task-id 42 --device gpu --conf 0.3
 ```
 
@@ -33,6 +33,15 @@ caah cvat project import my_project_backup.zip
 caah cvat project import_dataset -u 1 --input-file /path/to/dataset.zip --format yolo
 ```
 
+#### Project Management
+```bash
+# Create a new project
+caah cvat project create "New Project Name"
+
+# Backup a project to a zip file
+caah cvat project backup --project-id 1 --output-file backup.zip
+```
+
 ### `train` command
 
 Trains a YOLO model using a zipped dataset (typically exported from CVAT).
@@ -40,20 +49,23 @@ Trains a YOLO model using a zipped dataset (typically exported from CVAT).
 #### Example
 
 ```bash
-# Train with full custom parameters and NAS optimization
-caah train --data labels_only.zip --network-drive --split 8:2 --epochs 1000 --batch 32 --project "Bird-Detection" --name "YOLO11s-v1" --save-period 50 --workers 8
+# Train with custom augmentations and NAS optimization
+caah train --data labels_only.zip --network-drive --split 8:2 --augmentation ./my_aug.py --project "Bird-Detection" --name "YOLO11s-v1"
 ```
 
 ---
 
-## The "Golden Workflow" (NAS Optimized)
 
 If your images are stored on a NAS and mapped in CVAT as "Share" storage, use this workflow to avoid downloading massive datasets:
 
-1.`caah cvat project export_dataset --project-id 1 --no-images --output-file labels.zip` 2.`caah train --data labels.zip --network-drive --split 8:2`
+1.  **Export Labels**: `caah cvat project export_dataset --project-id 1 --no-images --output-file labels.zip`
+2.  **Train**: `caah train --data labels.zip --network-drive --split 8:2`
 
-_Note: This creates symlinks to the NAS images instead of copying them._
+*Note: This creates symlinks to the NAS images instead of copying them to the local machine.*
 
+---
+
+### `migrate` command
 ### `migrate` command
 
 Tools for moving projects and tasks between different CVAT servers (uses `CVAT_URL_2` etc. in `.env`).
@@ -121,6 +133,7 @@ caah migrate project-layout
   - `--save-period`: Save a checkpoint every X epochs.
   - `--workers`: Number of data loader workers. Default: `8`.
   - `--network-drive`: Enable NAS optimization (requires `NAS_PATH` in `.env`).
+  - `-a`, `--augmentation`: Path to a Python file defining `custom_transforms` (Albumentations).
 
   - **Action**: `backup`
     - **Description**: Export a project backup file.
