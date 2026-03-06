@@ -25,10 +25,7 @@ dependencies = [
     "datumaro",
     "cvat-sdk",
     "Pillow",
-    "typer",
-    "fastapi",
-    "uvicorn",
-    "python-multipart",
+    "typer"
 ]
 
 [project.urls]
@@ -52,5 +49,4 @@ py-modules = [
     "converter",
     "data_utils",
     "utils",
-    "server",
 ]
