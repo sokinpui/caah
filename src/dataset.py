@@ -13,8 +13,8 @@ dataset_app = typer.Typer(
 )
 
 
-@dataset_app.command("convert")
-def convert(
+@dataset_app.command("yolo2coco")
+def yolo2coco(
     input_file: Annotated[Path, typer.Argument(help="Input YOLO .zip file.")],
     output_file: Annotated[Path, typer.Argument(help="Output COCO .zip file.")],
 ):
