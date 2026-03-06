@@ -84,10 +84,14 @@ def annotate(
                 frame_ids = list(range(batch_start, batch_end))
 
                 # Parallel Fetch
-                images = list(executor.map(
-                    lambda fid: _get_frame_image(fid, task, frame_filenames.get(fid), nas_path),
-                    frame_ids
-                ))
+                images = list(
+                    executor.map(
+                        lambda fid: _get_frame_image(
+                            fid, task, frame_filenames.get(fid), nas_path
+                        ),
+                        frame_ids,
+                    )
+                )
 
                 # Batch Inference
                 batch_results = model.predict(images)

@@ -1,7 +1,7 @@
-import threading
 import sys
+import threading
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from utils import resolve_device
 
@@ -25,7 +25,9 @@ class YoloModel:
         print(f"YOLO model loaded from {model_path}", file=sys.stderr)
         print(f"Using device: {self.device}", file=sys.stderr)
 
-    def predict(self, image_source: Union[Path, Any, List[Any]]) -> Union[List[Dict], List[List[Dict]]]:
+    def predict(
+        self, image_source: Union[Path, Any, List[Any]]
+    ) -> Union[List[Dict], List[List[Dict]]]:
         """
         Performs inference on image(s) and returns annotations.
         Supports batch processing if a list is provided.
@@ -44,15 +46,15 @@ class YoloModel:
         # Map results back to the original input indices (handling Nones)
         all_annotations = []
         result_idx = 0
-        
+
         for src in sources:
             if src is None:
                 all_annotations.append([])
                 continue
-            
+
             res = results[result_idx]
             result_idx += 1
-            
+
             frame_preds = []
             boxes = res.boxes
             names = res.names
@@ -63,11 +65,13 @@ class YoloModel:
                 label = names[class_id]
                 box_coords = [int(coord) for coord in xyxy]
 
-                frame_preds.append({
-                    "label": label,
-                    "class_id": class_id,
-                    "box": box_coords,
-                })
+                frame_preds.append(
+                    {
+                        "label": label,
+                        "class_id": class_id,
+                        "box": box_coords,
+                    }
+                )
             all_annotations.append(frame_preds)
 
         return all_annotations if is_batch else all_annotations[0]

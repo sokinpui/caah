@@ -24,7 +24,6 @@ def setup_logging(log_file: str = "caah.log", level: int = logging.INFO):
     logger.addHandler(stream_handler)
 
 
-
 def resolve_device(device: str) -> str:
     """Resolves the device string to a valid torch/ultralytics device."""
     import torch

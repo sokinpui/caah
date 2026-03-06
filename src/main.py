@@ -25,6 +25,7 @@ app.add_typer(cvat_app, name="cvat")
 app.add_typer(migrate_app, name="migrate")
 app.command(name="train")(train)
 
+
 @app.callback()
 def global_options(
     stdout: Annotated[
