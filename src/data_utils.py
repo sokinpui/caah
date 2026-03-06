@@ -7,6 +7,8 @@ from typing import List, Optional, Tuple
 
 import yaml
 
+from utils import find_file, strip_prefix
+
 
 def split_dataset(
     source_dir: Path,
@@ -39,12 +41,8 @@ def split_dataset(
         rel_lp = lp.relative_to(labels_root)
         rel_lp_str = str(rel_lp)
 
-        # If labels are exported with prefix (e.g. RNT/img.txt), strip it to find in NAS
-        clean_rel_p = (
-            rel_lp_str[len(nas_prefix) :].lstrip("/")
-            if rel_lp_str.startswith(nas_prefix)
-            else rel_lp_str
-        )
+        # Strip prefix to find in NAS
+        clean_rel_p = strip_prefix(rel_lp_str, nas_prefix)
 
         for ext in image_extensions:
             img_p = search_dir / Path(clean_rel_p).with_suffix(ext)
@@ -92,23 +90,24 @@ def split_dataset(
 
 def find_class_names(extracted_path: Path) -> list[str]:
     """Finds class names from data.yaml or obj.names."""
-    yaml_files = list(extracted_path.glob("**/*.yaml"))
-    if yaml_files:
-        with open(yaml_files[0], "r") as f:
-            data = yaml.safe_load(f)
-            if "names" in data:
-                names = data["names"]
+    yaml_file = find_file(extracted_path, ["*.yaml"])
+    if yaml_file:
+        with open(yaml_file, "r") as f:
+            names = yaml.safe_load(f).get("names")
+            if names:
                 return (
                     names
                     if isinstance(names, list)
                     else [n for i, n in sorted(names.items())]
                 )
 
-    names_files = list(extracted_path.glob("**/*.names"))
-    if names_files:
-        return names_files[0].read_text().strip().split("\n")
+    names_file = find_file(extracted_path, ["*.names", "classes.txt"])
+    if names_file:
+        return names_file.read_text().strip().split("\n")
 
-    raise FileNotFoundError("Could not find class names file (*.yaml or *.names).")
+    raise FileNotFoundError(
+        "Could not find class names file (*.yaml, *.names, or classes.txt)."
+    )
 
 
 def _copy_split_files(

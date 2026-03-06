@@ -1,7 +1,6 @@
 import importlib.util
 import os
 import tempfile
-import zipfile
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -9,19 +8,7 @@ import typer
 from dotenv import load_dotenv
 
 from data_utils import split_dataset
-from utils import resolve_device
-
-
-def find_yaml_file(directory: Path) -> Path:
-    """Finds the 'data.yaml' file in the extracted directory."""
-    yaml_files = list(directory.glob("**/data.yaml"))
-    if not yaml_files:
-        raise FileNotFoundError(f"Could not find 'data.yaml' in {directory}")
-
-    if len(yaml_files) > 1:
-        print(f"Warning: Found multiple 'data.yaml' files. Using: {yaml_files[0]}")
-
-    return yaml_files[0]
+from utils import extract_zip, find_file, resolve_device
 
 
 def train_model(
@@ -100,8 +87,7 @@ def process_dataset_and_train(
         extract_dir.mkdir()
 
         print(f"Extracting dataset to temporary directory: {extract_dir}")
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(extract_dir)
+        extract_zip(zip_path, extract_dir)
 
         if split:
             print(f"Splitting dataset with ratio {split}...")
@@ -111,7 +97,10 @@ def process_dataset_and_train(
                 extract_dir, split_dir, split, nas_path=nas_path, nas_prefix=nas_prefix
             )
         else:
-            data_yaml_path = find_yaml_file(extract_dir)
+            data_yaml_path = find_file(extract_dir, ["data.yaml"])
+
+        if not data_yaml_path:
+            raise FileNotFoundError(f"Could not find 'data.yaml' in {extract_dir}")
 
         train_model(
             data_yaml_path,

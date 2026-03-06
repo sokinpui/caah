@@ -1,11 +1,12 @@
 import json
 import shutil
 import tempfile
-import zipfile
 from pathlib import Path
 from typing import Optional, Tuple
 
 from datumaro.components.dataset import Dataset
+
+from utils import create_zip, extract_zip
 
 
 def slice_coco_dataset(
@@ -32,7 +33,7 @@ def slice_coco_dataset(
         ann_dir.mkdir(parents=True, exist_ok=True)
         img_dir.mkdir(parents=True, exist_ok=True)
 
-        _extract_zip(input_zip, extract_path)
+        extract_zip(input_zip, extract_path)
 
         json_files = sorted(list(extract_path.rglob("*.json")))
         if not json_files:
@@ -67,7 +68,7 @@ def slice_coco_dataset(
                     elif item.is_file() and item.suffix.lower() != ".json":
                         shutil.move(str(item), str(img_dir / item.name))
 
-        _create_zip(output_dir, output_zip)
+        create_zip(output_dir, output_zip)
 
 
 def _resolve_image_dir(extract_path: Path, coco_path: Path) -> Path:
@@ -119,12 +120,12 @@ def coco_to_yolo(input_zip: Path, output_zip: Path):
         extract_path = working_dir / "extract"
         export_path = working_dir / "export"
 
-        _extract_zip(input_zip, extract_path)
+        extract_zip(input_zip, extract_path)
 
         dataset = Dataset.import_from(str(extract_path), format="coco")
         dataset.export(str(export_path), format="yolo", save_media=True)
 
-        _create_zip(export_path, output_zip)
+        create_zip(export_path, output_zip)
 
 
 def yolo_to_coco(
@@ -145,7 +146,7 @@ def yolo_to_coco(
         extract_path = working_dir / "extract"
         export_path = working_dir / "export"
 
-        _extract_zip(input_zip, extract_path)
+        extract_zip(input_zip, extract_path)
 
         if nas_path:
             _fill_images_from_nas(extract_path, nas_path, nas_prefix)
@@ -153,7 +154,7 @@ def yolo_to_coco(
         dataset = Dataset.import_from(str(extract_path), format="yolo")
         dataset.export(str(export_path), format="coco_instances", save_media=True)
 
-        _create_zip(export_path, output_zip)
+        create_zip(export_path, output_zip)
 
 
 def _fill_images_from_nas(extract_path: Path, nas_path: Path, nas_prefix: str):
@@ -181,20 +182,3 @@ def _fill_images_from_nas(extract_path: Path, nas_path: Path, nas_prefix: str):
             if nas_img.exists():
                 shutil.copy2(nas_img, lbl.with_suffix(ext))
                 break
-
-
-def _extract_zip(zip_path: Path, dest_path: Path):
-    dest_path.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zip_path, "r") as z:
-        z.extractall(dest_path)
-
-
-def _create_zip(source_path: Path, output_zip: Path):
-    if output_zip.exists():
-        output_zip.unlink()
-
-    with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as z:
-        for file in source_path.rglob("*"):
-            if not file.is_file():
-                continue
-            z.write(file, file.relative_to(source_path))

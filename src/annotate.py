@@ -10,6 +10,7 @@ from cvat_sdk.api_client import models
 from dotenv import load_dotenv
 from PIL import Image
 
+from utils import calculate_ioa, strip_prefix
 from yolo_model import YoloModel
 
 
@@ -161,7 +162,7 @@ def _process_predictions(
             continue
 
         for exist in frame_existing:
-            if _calculate_ioa(pred["box"], exist.points) <= ioa_threshold:
+            if calculate_ioa(pred["box"], exist.points) <= ioa_threshold:
                 continue
 
             exist_source = (
@@ -199,12 +200,8 @@ def _get_frame_image(
 ) -> Optional[Image.Image]:
     """Retrieves image from NAS or CVAT API."""
     if nas_path and filename:
-        # Strip prefix if present (e.g., 'RNT/image.jpg' -> 'image.jpg')
-        clean_name = (
-            filename[len(prefix) :].lstrip("/")
-            if filename.startswith(prefix)
-            else filename
-        )
+        clean_name = strip_prefix(filename, prefix)
+
         local_file = nas_path / clean_name
 
         if local_file.exists():
@@ -217,20 +214,6 @@ def _get_frame_image(
         return Image.open(io.BytesIO(task.get_frame(frame_id).read()))
     except Exception:
         return None
-
-
-def _calculate_ioa(new_box: list[float], old_box: list[float]) -> float:
-    """Calculate Intersection over Area (IoA) relative to the old box."""
-    x_min, y_min = max(new_box[0], old_box[0]), max(new_box[1], old_box[1])
-    x_max, y_max = min(new_box[2], old_box[2]), min(new_box[3], old_box[3])
-
-    if x_max <= x_min or y_max <= y_min:
-        return 0.0
-
-    intersection_area = (x_max - x_min) * (y_max - y_min)
-    old_area = (old_box[2] - old_box[0]) * (old_box[3] - old_box[1])
-
-    return intersection_area / old_area if old_area > 0 else 0.0
 
 
 def _load_yolo_model(model_path_str: str, device: str) -> YoloModel:
