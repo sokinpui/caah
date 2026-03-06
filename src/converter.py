@@ -3,8 +3,7 @@ import shutil
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Optional
-from typing import Tuple
+from typing import Optional, Tuple
 
 from datumaro.components.dataset import Dataset
 
@@ -70,6 +69,7 @@ def slice_coco_dataset(
 
         _create_zip(output_dir, output_zip)
 
+
 def _resolve_image_dir(extract_path: Path, coco_path: Path) -> Path:
     """
     Finds the root directory for images referenced in a COCO JSON.
@@ -127,7 +127,12 @@ def coco_to_yolo(input_zip: Path, output_zip: Path):
         _create_zip(export_path, output_zip)
 
 
-def yolo_to_coco(input_zip: Path, output_zip: Path, nas_path: Optional[Path] = None, nas_prefix: str = ""):
+def yolo_to_coco(
+    input_zip: Path,
+    output_zip: Path,
+    nas_path: Optional[Path] = None,
+    nas_prefix: str = "",
+):
     """
     Converts a YOLO format ZIP dataset to COCO instances format.
     Handles datasets with or without images automatically via Datumaro.

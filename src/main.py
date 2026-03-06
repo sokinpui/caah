@@ -4,6 +4,7 @@ import sys
 from typing import Annotated, Optional
 
 import typer
+
 from annotate import annotate
 from cvat import cvat_app
 from dataset import dataset_app
@@ -16,7 +17,9 @@ logging.getLogger("cvat_sdk").setLevel(logging.ERROR)
 
 setup_logging()
 
-app = typer.Typer(help="CVAT auto annotation helper.", context_settings=CONTEXT_SETTINGS)
+app = typer.Typer(
+    help="CVAT auto annotation helper.", context_settings=CONTEXT_SETTINGS
+)
 
 app.command(name="annotate")(annotate)
 app.add_typer(cvat_app, name="cvat")
