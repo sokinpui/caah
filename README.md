@@ -13,7 +13,6 @@
     ```bash
     conda create --name caah python=3.10
     direnv allow
-    pip install -r requirements.txt
     pip install -e .
     ```
 

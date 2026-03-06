@@ -25,6 +25,7 @@ dependencies = [
     "datumaro",
     "cvat-sdk",
     "Pillow",
+    "pyyaml",
     "typer"
 ]
 

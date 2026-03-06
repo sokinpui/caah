@@ -1,8 +1,0 @@
-ultralytics
-python-dotenv
-requests
-tabulate
-pyyaml
-cvat-sdk
-Pillow
-typer
