@@ -38,9 +38,13 @@ def split_dataset(
     for lp in label_paths:
         rel_lp = lp.relative_to(labels_root)
         rel_lp_str = str(rel_lp)
-        
+
         # If labels are exported with prefix (e.g. RNT/img.txt), strip it to find in NAS
-        clean_rel_p = rel_lp_str[len(nas_prefix):].lstrip("/") if rel_lp_str.startswith(nas_prefix) else rel_lp_str
+        clean_rel_p = (
+            rel_lp_str[len(nas_prefix) :].lstrip("/")
+            if rel_lp_str.startswith(nas_prefix)
+            else rel_lp_str
+        )
 
         for ext in image_extensions:
             img_p = search_dir / Path(clean_rel_p).with_suffix(ext)

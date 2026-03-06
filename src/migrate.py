@@ -126,7 +126,7 @@ def _migrate_task_internal(
         for f in server_files:
             # Remove old root if present at the start of the path
             rel_path = f[len(old_root) :].lstrip("/") if f.startswith(old_root) else f
-            
+
             # Prepend new root
             new_path = f"{new_root}/{rel_path}".lstrip("/")
             updated_files.append(new_path)

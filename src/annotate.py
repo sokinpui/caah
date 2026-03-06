@@ -200,7 +200,11 @@ def _get_frame_image(
     """Retrieves image from NAS or CVAT API."""
     if nas_path and filename:
         # Strip prefix if present (e.g., 'RNT/image.jpg' -> 'image.jpg')
-        clean_name = filename[len(prefix) :].lstrip("/") if filename.startswith(prefix) else filename
+        clean_name = (
+            filename[len(prefix) :].lstrip("/")
+            if filename.startswith(prefix)
+            else filename
+        )
         local_file = nas_path / clean_name
 
         if local_file.exists():
