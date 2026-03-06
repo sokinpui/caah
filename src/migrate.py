@@ -34,13 +34,15 @@ def _get_migration_config():
         os.getenv("CVAT_PASSWORD_2"),
         os.getenv("CVAT_URL_2"),
     )
+    target_share = os.getenv("CVAT_SHARE_PATH", "/home/django/share")
+    source_share = os.getenv("CVAT_SHARE_PATH_2", "/home/django/share")
 
     if not all(target):
         raise ValueError("Target CVAT credentials missing in .env (CVAT_URL, etc.)")
     if not all(source):
         raise ValueError("Source CVAT credentials missing in .env (CVAT_URL_2, etc.)")
 
-    return source, target
+    return source, target, source_share, target_share
 
 
 def _clone_labels(labels) -> list[models.PatchedLabelRequest]:
@@ -68,8 +70,8 @@ def _migrate_task_worker(
     Worker function to migrate a single task.
     Opens fresh client connections for thread safety.
     """
-    (source_user, source_pass, source_url) = source_config
-    (target_user, target_pass, target_url) = target_config
+    source_user, source_pass, source_url = source_config
+    target_user, target_pass, target_url = target_config
 
     try:
         with make_client(
@@ -115,26 +117,19 @@ def _migrate_task_internal(
     meta = old_task.get_meta()
     server_files = [frame.name for frame in meta.frames]
 
-    if old_prefix and new_prefix:
-        # Normalize prefixes to avoid double slashes
-        o_pref = old_prefix.rstrip("/")
-        n_pref = new_prefix.rstrip("/")
-
-        # Calculate the relative path difference
-        # e.g. /home/django/share -> /home/django/share/RNT => diff is "RNT"
-        diff = n_pref.replace(o_pref, "").lstrip("/")
+    if old_prefix != new_prefix:
+        # Normalize to ensure comparison works regardless of trailing slashes
+        old_root = old_prefix.strip("/")
+        new_root = new_prefix.strip("/")
 
         updated_files = []
         for f in server_files:
-            if f.startswith(o_pref):
-                # If source path is absolute, replace prefix
-                updated_files.append(f.replace(o_pref, n_pref, 1))
-            elif not f.startswith("/") and diff:
-                # If source path is relative, prepend the difference
-                # e.g. SoftwareTeam/... -> RNT/SoftwareTeam/...
-                updated_files.append(f"{diff}/{f}")
-            else:
-                updated_files.append(f)
+            # Remove old root if present at the start of the path
+            rel_path = f[len(old_root) :].lstrip("/") if f.startswith(old_root) else f
+            
+            # Prepend new root
+            new_path = f"{new_root}/{rel_path}".lstrip("/")
+            updated_files.append(new_path)
 
         server_files = updated_files
 
@@ -191,16 +186,21 @@ def migrate_task(
 ) -> None:
     """Migrates a single task from old server to new server."""
     (
-        (source_user, source_pass, source_url),
-        (target_user, target_pass, target_url),
+        source_cfg,
+        target_cfg,
+        def_old_pref,
+        def_new_pref,
     ) = _get_migration_config()
 
-    logger.info(f"Migrating task {task_id} from {source_url} to {target_url}...")
+    old_prefix = old_prefix or def_old_pref
+    new_prefix = new_prefix or def_new_pref
+
+    logger.info(f"Migrating task {task_id} from {source_cfg[2]} to {target_cfg[2]}...")
 
     with make_client(
-        source_url, credentials=(source_user, source_pass)
+        source_cfg[2], credentials=(source_cfg[0], source_cfg[1])
     ) as old_client, make_client(
-        target_url, credentials=(target_user, target_pass)
+        target_cfg[2], credentials=(target_cfg[0], target_cfg[1])
     ) as new_client:
 
         old_task = old_client.tasks.retrieve(task_id)
@@ -231,14 +231,19 @@ def migrate_tasks(
 ) -> None:
     """Migrates all tasks from source to target, matching or creating projects by name."""
     (
-        (source_user, source_pass, source_url),
-        (target_user, target_pass, target_url),
+        source_cfg,
+        target_cfg,
+        def_old_pref,
+        def_new_pref,
     ) = _get_migration_config()
 
+    old_prefix = old_prefix or def_old_pref
+    new_prefix = new_prefix or def_new_pref
+
     with make_client(
-        source_url, credentials=(source_user, source_pass)
+        source_cfg[2], credentials=(source_cfg[0], source_cfg[1])
     ) as old_client, make_client(
-        target_url, credentials=(target_user, target_pass)
+        target_cfg[2], credentials=(target_cfg[0], target_cfg[1])
     ) as new_client:
 
         target_projects = new_client.projects.list()
@@ -284,8 +289,8 @@ def migrate_tasks(
             executor.submit(
                 _migrate_task_worker,
                 tid,
-                (source_user, source_pass, source_url),
-                (target_user, target_pass, target_url),
+                source_cfg,
+                target_cfg,
                 pid,
                 old_prefix,
                 new_prefix,
@@ -309,10 +314,9 @@ def migrate_project_layout(
     ] = None,
 ) -> None:
     """Creates projects on the target server with the same names and labels as the source."""
-    (
-        (source_user, source_pass, source_url),
-        (target_user, target_pass, target_url),
-    ) = _get_migration_config()
+    (source_cfg, target_cfg, _, _) = _get_migration_config()
+    source_user, source_pass, source_url = source_cfg
+    target_user, target_pass, target_url = target_cfg
 
     logger.info(f"Syncing project layouts from {source_url} to {target_url}...")
 

@@ -44,5 +44,3 @@ def resolve_device(device: str) -> str:
         file=sys.stderr,
     )
     return "cpu"
-
-    return device

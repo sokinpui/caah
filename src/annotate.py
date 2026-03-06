@@ -40,6 +40,7 @@ def annotate(
         os.getenv("CVAT_PASSWORD"),
     )
     nas_path_str = os.getenv("NAS_PATH")
+    nas_prefix = os.getenv("NAS_PREFIX", "")
     nas_path = Path(nas_path_str) if nas_path_str else None
 
     if not all([url, user, password]):
@@ -87,7 +88,7 @@ def annotate(
                 images = list(
                     executor.map(
                         lambda fid: _get_frame_image(
-                            fid, task, frame_filenames.get(fid), nas_path
+                            fid, task, frame_filenames.get(fid), nas_path, nas_prefix
                         ),
                         frame_ids,
                     )
@@ -188,15 +189,20 @@ def _process_predictions(
             )
         )
 
-    return new_shapes, dropped_ids
-
 
 def _get_frame_image(
-    frame_id: int, task: Any, filename: Optional[str], nas_path: Optional[Path]
+    frame_id: int,
+    task: Any,
+    filename: Optional[str],
+    nas_path: Optional[Path],
+    prefix: str = "",
 ) -> Optional[Image.Image]:
     """Retrieves image from NAS or CVAT API."""
     if nas_path and filename:
-        local_file = nas_path / filename
+        # Strip prefix if present (e.g., 'RNT/image.jpg' -> 'image.jpg')
+        clean_name = filename[len(prefix) :].lstrip("/") if filename.startswith(prefix) else filename
+        local_file = nas_path / clean_name
+
         if local_file.exists():
             try:
                 return Image.open(local_file)

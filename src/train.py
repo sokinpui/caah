@@ -80,6 +80,7 @@ def process_dataset_and_train(
     device: str,
     split: Optional[str] = None,
     nas_path: Optional[str] = None,
+    nas_prefix: str = "",
     save_period: int = -1,
     workers: int = 8,
     project: Optional[str] = None,
@@ -107,7 +108,7 @@ def process_dataset_and_train(
             split_dir = tmpdir_path / "split"
             split_dir.mkdir()
             data_yaml_path = split_dataset(
-                extract_dir, split_dir, split, nas_path=nas_path
+                extract_dir, split_dir, split, nas_path=nas_path, nas_prefix=nas_prefix
             )
         else:
             data_yaml_path = find_yaml_file(extract_dir)
@@ -193,6 +194,8 @@ def train(
         model_spec += ".pt"
 
     nas_path = os.getenv("NAS_PATH") if network_drive else None
+    nas_prefix = os.getenv("NAS_PREFIX", "")
+
     if network_drive and not nas_path:
         raise ValueError("--network-drive requires NAS_PATH in .env")
 
@@ -209,6 +212,7 @@ def train(
         device=device,
         split=split,
         nas_path=nas_path,
+        nas_prefix=nas_prefix,
         save_period=save_period,
         workers=workers,
         project=project,

@@ -1,3 +1,4 @@
+import os
 import random
 import shutil
 import sys
@@ -8,7 +9,11 @@ import yaml
 
 
 def split_dataset(
-    source_dir: Path, dest_dir: Path, split_str: str, nas_path: Optional[str] = None
+    source_dir: Path,
+    dest_dir: Path,
+    split_str: str,
+    nas_path: Optional[str] = None,
+    nas_prefix: str = "",
 ) -> Path:
     """Splits files from source_dir into train/val sets in dest_dir."""
     try:
@@ -32,8 +37,13 @@ def split_dataset(
     image_label_pairs = []
     for lp in label_paths:
         rel_lp = lp.relative_to(labels_root)
+        rel_lp_str = str(rel_lp)
+        
+        # If labels are exported with prefix (e.g. RNT/img.txt), strip it to find in NAS
+        clean_rel_p = rel_lp_str[len(nas_prefix):].lstrip("/") if rel_lp_str.startswith(nas_prefix) else rel_lp_str
+
         for ext in image_extensions:
-            img_p = search_dir / rel_lp.with_suffix(ext)
+            img_p = search_dir / Path(clean_rel_p).with_suffix(ext)
             if img_p.exists():
                 image_label_pairs.append((img_p, lp))
                 break
@@ -105,11 +115,14 @@ def _copy_split_files(
 ) -> None:
     img_dest.mkdir(parents=True, exist_ok=True)
     lbl_dest.mkdir(parents=True, exist_ok=True)
-    for img_path, lbl_path in pairs:
+    for i, (img_path, lbl_path) in enumerate(pairs):
+        unique_stem = f"{i}_{img_path.stem}"
+        target_img = img_dest / f"{unique_stem}{img_path.suffix}"
+        target_lbl = lbl_dest / f"{unique_stem}{lbl_path.suffix}"
+
         # If using NAS, we don't copy images, we symlink them so YOLO can find them
         if only_labels:
-            (img_dest / img_path.name).symlink_to(img_path)
+            target_img.symlink_to(img_path)
         else:
-            shutil.copy(img_path, img_dest / img_path.name)
-
-        shutil.copy(lbl_path, lbl_dest / lbl_path.name)
+            shutil.copy(img_path, target_img)
+        shutil.copy(lbl_path, target_lbl)
