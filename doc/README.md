@@ -22,22 +22,31 @@ caah annotate --model ./weights/best.pt --task-id 42 --device gpu --conf 0.3
 ### `cvat` command
 
 A wrapper for interacting with the CVAT REST API.
-
-#### Examples
-
 ```bash
 # List all projects
 caah cvat project list
-
-# List all projects
-caah cvat project list
-
-# Export a project's dataset
-caah cvat project export_dataset -u 1 --format "YOLO 1.1" --output-file dataset_export.zip --only-manual
+# Import a project from a backup
+caah cvat project import my_project_backup.zip
 
 # Import a dataset into a project
 caah cvat project import_dataset -u 1 --input-file /path/to/dataset.zip --format yolo
+```
 
+### `train` command
+
+Trains a YOLO model using a zipped dataset (typically exported from CVAT).
+
+#### Example
+
+```bash
+# Train a YOLO11n model for 100 epochs
+caah train --data dataset.zip --model yolo11n --epochs 100 --device 0 --split 80:20
+
+# Train using a custom local model as base
+caah train --data dataset.zip --path ./weights/best.pt --epochs 50
+```
+
+### `convert` command
 # Import a project from a backup
 caah cvat project import my_project_backup.zip
 
@@ -68,6 +77,19 @@ Converts local datasets between different formats using Datumaro.
 caah convert -i input.zip -o output.zip --from cvat --to yolo
 ```
 
+### `migrate` command
+
+Tools for moving projects and tasks between different CVAT servers (uses `CVAT_URL_2` etc. in `.env`).
+
+#### Example
+
+```bash
+# Migrate a specific task and remap NAS paths
+caah migrate task --task-id 123 --old-prefix /mnt/old/share --new-prefix /home/django/share
+
+# Sync all project structures and labels from source to target server
+caah migrate project-layout
+```
 ---
 
 ## Command Reference
@@ -125,3 +147,61 @@ caah convert -i input.zip -o output.zip --from cvat --to yolo
   - `-o`, `--output-file` (required): Path for output zip.
   - `-f`, `--from` (required): Source format (e.g., cvat, coco).
   - `-t`, `--to` (required): Destination format (e.g., yolo, voc).
+  - **Action**: `list`
+    - **Description**: List all projects in the CVAT instance.
+  - **Action**: `create`
+    - **Description**: Create a new project.
+    - **Options**:
+      - `-n`, `--name` (required): Project name.
+  - **Action**: `delete`
+    - **Options**:
+      - `-f`, `--format`: Dataset format. Default: `YOLO 1.1`.
+      - `--no-images`: Do not include images in the export.
+      - `--only-manual`: Export only manual annotations.
+  - **Action**: `backup`
+    - **Description**: Export a project backup file.
+    - **Options**:
+      - `-u`, `--project-id`: ID of the project.
+      - `-o`, `--output-file`: Path to save the backup zip.
+  - **Action**: `import`
+    - **Description**: Import a project from a backup file.
+    - **Options**:
+      - `-i`, `--input-file`: Path to the backup zip.
+
+### `migrate` command
+
+- **Action**: `task`
+  - **Description**: Migrate a single task using NAS share optimization.
+  - **Options**:
+    - `-t`, `--task-id`: Source task ID.
+    - `-p`, `--project-id`: Target project ID (optional).
+    - `--old-prefix`: Prefix to replace in source file paths.
+    - `--new-prefix`: New prefix for target file paths.
+
+- **Action**: `tasks`
+  - **Description**: Bulk migrate all tasks, matching projects by name.
+  - **Options**:
+    - `--orphans`: Migrate tasks not assigned to any project.
+    - `-j`, `--jobs`: Parallel migration workers.
+    - `--old-prefix`: Prefix to replace in source file paths.
+    - `--new-prefix`: New prefix for target file paths.
+
+- **Action**: `project-layout`
+  - **Description**: Recreate project structures (names and labels) on the target server.
+  - **Options**:
+    - `-p`, `--project-id`: Specific project to sync (if omitted, syncs all).
+
+### `annotate` command
+
+- **Description**: Perform auto-annotation on a CVAT task.
+- **Options**:
+  - `-m`, `--model`, `--task-id`, `--device`, `--conf`, `--ioa`, `--jobs`, `--batch`.
+
+### `train` command
+
+  - `-b`, `--batch`: Batch size. Default: `16`.
+  - `--device`: Training device (cpu, gpu, or ID). Default: `gpu`.
+  - `-s`, `--split`: Ratio to split dataset if not already split.
+  - `--network-drive`: Enable NAS optimization (requires `NAS_PATH` in `.env`).
+
+### `convert` command
