@@ -42,6 +42,22 @@ caah cvat project create "New Project Name"
 caah cvat project backup --project-id 1 --output-file backup.zip
 ```
 
+### `dataset` command
+
+Utilities for format conversion and image tiling.
+
+```bash
+# Convert YOLO export to COCO (required for slicing)
+caah dataset yolo2coco input_yolo.zip output_coco.zip
+
+# Slice a COCO dataset into 640x640 tiles with 20% overlap
+caah dataset slice input_coco.zip sliced_coco.zip --size 640:640 --overlap 0.2:0.2
+
+# Convert sliced COCO back to YOLO for training
+caah dataset coco2yolo sliced_coco.zip sliced_yolo.zip
+```
+
+
 ### `train` command
 
 Trains a YOLO model using a zipped dataset (typically exported from CVAT).

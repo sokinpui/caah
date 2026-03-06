@@ -49,14 +49,15 @@ The tool is accessed via the `caah` command. You can explore available modules u
 caah --help
 ```
 
-### Core Capabilities
 
 1.  **Dataset Management**: Export/Import projects and tasks from CVAT.
 2.  **Training**: Train YOLOv11 models with NAS optimization and custom Albumentations.
-3.  **Auto-Annotation**: Batch inference on CVAT tasks with IoA-based filtering of existing labels.
-4.  **Migration**: Move tasks and project structures between different CVAT instances.
-5.  upload the result back to the same CVAT project
+3.  **Dataset Processing**: Convert between YOLO/COCO formats and perform dataset slicing (tiling) for high-resolution imagery.
+4.  **Auto-Annotation**: Batch inference on CVAT tasks with IoA-based filtering of existing labels.
+5.  **Migration**: Move tasks and project structures between different CVAT instances.
+6.  **Upload**: Upload the result back to the same CVAT project.
 
+## Documents
 ## Documents
 
 - [Documents](./doc/README.md)
