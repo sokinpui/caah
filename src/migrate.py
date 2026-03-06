@@ -61,6 +61,8 @@ def _migrate_task_worker(
     source_config: tuple,
     target_config: tuple,
     project_id: Optional[int] = None,
+    old_prefix: Optional[str] = None,
+    new_prefix: Optional[str] = None,
 ) -> str:
     """
     Worker function to migrate a single task.
@@ -77,7 +79,13 @@ def _migrate_task_worker(
         ) as target_client:
 
             old_task = source_client.tasks.retrieve(task_id)
-            new_task = _migrate_task_internal(old_task, target_client, project_id)
+            new_task = _migrate_task_internal(
+                old_task,
+                target_client,
+                project_id,
+                old_prefix=old_prefix,
+                new_prefix=new_prefix,
+            )
 
             if not new_task:
                 msg = f"Task {task_id}: No data found."
@@ -96,10 +104,39 @@ def _migrate_task_worker(
         return f"[ERROR] {msg}"
 
 
-def _migrate_task_internal(old_task, new_client, project_id: Optional[int] = None):
+def _migrate_task_internal(
+    old_task,
+    new_client,
+    project_id: Optional[int] = None,
+    old_prefix: Optional[str] = None,
+    new_prefix: Optional[str] = None,
+):
     """Core logic to migrate a single task instance using NAS sharing."""
     meta = old_task.get_meta()
     server_files = [frame.name for frame in meta.frames]
+
+    if old_prefix and new_prefix:
+        # Normalize prefixes to avoid double slashes
+        o_pref = old_prefix.rstrip("/")
+        n_pref = new_prefix.rstrip("/")
+
+        # Calculate the relative path difference
+        # e.g. /home/django/share -> /home/django/share/RNT => diff is "RNT"
+        diff = n_pref.replace(o_pref, "").lstrip("/")
+
+        updated_files = []
+        for f in server_files:
+            if f.startswith(o_pref):
+                # If source path is absolute, replace prefix
+                updated_files.append(f.replace(o_pref, n_pref, 1))
+            elif not f.startswith("/") and diff:
+                # If source path is relative, prepend the difference
+                # e.g. SoftwareTeam/... -> RNT/SoftwareTeam/...
+                updated_files.append(f"{diff}/{f}")
+            else:
+                updated_files.append(f)
+
+        server_files = updated_files
 
     if not server_files:
         logger.warning(
@@ -143,6 +180,14 @@ def migrate_task(
         Optional[int],
         typer.Option("--project-id", "-p", help="Target Project ID on the NEW server."),
     ] = None,
+    old_prefix: Annotated[
+        Optional[str],
+        typer.Option(help="Prefix to replace in source file paths."),
+    ] = None,
+    new_prefix: Annotated[
+        Optional[str],
+        typer.Option(help="New prefix for target file paths."),
+    ] = None,
 ) -> None:
     """Migrates a single task from old server to new server."""
     (
@@ -159,7 +204,9 @@ def migrate_task(
     ) as new_client:
 
         old_task = old_client.tasks.retrieve(task_id)
-        new_task = _migrate_task_internal(old_task, new_client, project_id)
+        new_task = _migrate_task_internal(
+            old_task, new_client, project_id, old_prefix, new_prefix
+        )
 
         if new_task:
             logger.info(f"Successfully migrated task {task_id} -> {new_task.id}")
@@ -173,6 +220,14 @@ def migrate_tasks(
     jobs: Annotated[
         int, typer.Option("--jobs", "-j", help="Number of parallel migrations.")
     ] = 2,
+    old_prefix: Annotated[
+        Optional[str],
+        typer.Option(help="Prefix to replace in source file paths."),
+    ] = None,
+    new_prefix: Annotated[
+        Optional[str],
+        typer.Option(help="New prefix for target file paths."),
+    ] = None,
 ) -> None:
     """Migrates all tasks from source to target, matching or creating projects by name."""
     (
@@ -197,7 +252,9 @@ def migrate_tasks(
             target_id = project_map.get(sp.name)
 
             if not target_id:
-                logger.info(f"Project '{sp.name}' not found on target. Creating layout...")
+                logger.info(
+                    f"Project '{sp.name}' not found on target. Creating layout..."
+                )
                 new_labels = _clone_labels(sp.get_labels())
                 project_req = models.ProjectWriteRequest(
                     name=sp.name, labels=new_labels
@@ -224,7 +281,15 @@ def migrate_tasks(
     )
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
         futures = [
-            executor.submit(_migrate_task_worker, tid, (source_user, source_pass, source_url), (target_user, target_pass, target_url), pid)
+            executor.submit(
+                _migrate_task_worker,
+                tid,
+                (source_user, source_pass, source_url),
+                (target_user, target_pass, target_url),
+                pid,
+                old_prefix,
+                new_prefix,
+            )
             for tid, pid in all_tasks_to_migrate
         ]
         for future in concurrent.futures.as_completed(futures):
