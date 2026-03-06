@@ -9,7 +9,10 @@ from pydantic import BaseModel
 
 from annotate import annotate as run_annotate
 from cvat import _get_api
+from utils import setup_logging
 from train import process_dataset_and_train
+
+setup_logging()
 
 app = FastAPI(title="CAAH API", description="Cvat Auto Annotation Helper API")
 

@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from typing import Annotated, Optional
@@ -8,10 +9,15 @@ from annotate import annotate
 from cvat import cvat_app
 from migrate import migrate_app
 from train import train
-from utils import CONTEXT_SETTINGS
+from utils import CONTEXT_SETTINGS, setup_logging
+
+# Suppress CVAT SDK version compatibility warnings
+logging.getLogger("cvat_sdk").setLevel(logging.ERROR)
+
+setup_logging()
 
 app = typer.Typer(
-    help="Cvat auto annotation helper.", context_settings=CONTEXT_SETTINGS
+    help="CVAT auto annotation helper.", context_settings=CONTEXT_SETTINGS
 )
 
 app.command(name="annotate")(annotate)

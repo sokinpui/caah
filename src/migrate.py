@@ -1,4 +1,5 @@
 import concurrent.futures
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -11,6 +12,8 @@ from cvat_sdk.core.proxies.tasks import ResourceType
 from dotenv import load_dotenv
 
 from utils import CONTEXT_SETTINGS
+
+logger = logging.getLogger(__name__)
 
 migrate_app = typer.Typer(
     help="Migration tools for moving tasks between servers.",
@@ -77,14 +80,20 @@ def _migrate_task_worker(
             new_task = _migrate_task_internal(old_task, target_client, project_id)
 
             if not new_task:
-                return f"[SKIPPED] Task {task_id}: No data found."
+                msg = f"Task {task_id}: No data found."
+                logger.warning(f"[SKIPPED] {msg}")
+                return f"[SKIPPED] {msg}"
 
-            return (
+            msg = (
                 f"[SUCCESS] Migrated task: {old_task.name} "
                 f"({task_id} -> {new_task.id})"
             )
+            logger.info(msg)
+            return msg
     except Exception as e:
-        return f"[ERROR] Failed to migrate task {task_id}: {str(e)}"
+        msg = f"Failed to migrate task {task_id}: {str(e)}"
+        logger.error(f"[ERROR] {msg}")
+        return f"[ERROR] {msg}"
 
 
 def _migrate_task_internal(old_task, new_client, project_id: Optional[int] = None):
@@ -93,7 +102,7 @@ def _migrate_task_internal(old_task, new_client, project_id: Optional[int] = Non
     server_files = [frame.name for frame in meta.frames]
 
     if not server_files:
-        print(
+        logger.warning(
             f"Skipping task '{old_task.name}' (ID: {old_task.id}): No image data found."
         )
         return None
@@ -141,7 +150,7 @@ def migrate_task(
         (target_user, target_pass, target_url),
     ) = _get_migration_config()
 
-    print(f"Migrating task {task_id} from {source_url} to {target_url}...")
+    logger.info(f"Migrating task {task_id} from {source_url} to {target_url}...")
 
     with make_client(
         source_url, credentials=(source_user, source_pass)
@@ -153,7 +162,7 @@ def migrate_task(
         new_task = _migrate_task_internal(old_task, new_client, project_id)
 
         if new_task:
-            print(f"Successfully migrated task {task_id} -> {new_task.id}")
+            logger.info(f"Successfully migrated task {task_id} -> {new_task.id}")
 
 
 @migrate_app.command("tasks")
@@ -188,7 +197,7 @@ def migrate_tasks(
             target_id = project_map.get(sp.name)
 
             if not target_id:
-                print(f"Project '{sp.name}' not found on target. Creating layout...")
+                logger.info(f"Project '{sp.name}' not found on target. Creating layout...")
                 new_labels = _clone_labels(sp.get_labels())
                 project_req = models.ProjectWriteRequest(
                     name=sp.name, labels=new_labels
@@ -207,17 +216,20 @@ def migrate_tasks(
                 all_tasks_to_migrate.append((t.id, None))
 
     if not all_tasks_to_migrate:
-        print("No tasks found to migrate.")
+        logger.info("No tasks found to migrate.")
         return
 
-    print(f"Starting migration of {len(all_tasks_to_migrate)} tasks using {jobs} jobs...")
+    logger.info(
+        f"Starting migration of {len(all_tasks_to_migrate)} tasks using {jobs} jobs..."
+    )
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
         futures = [
             executor.submit(_migrate_task_worker, tid, (source_user, source_pass, source_url), (target_user, target_pass, target_url), pid)
             for tid, pid in all_tasks_to_migrate
         ]
         for future in concurrent.futures.as_completed(futures):
-            print(future.result())
+            # Result is already logged inside the worker
+            future.result()
 
 
 @migrate_app.command("project-layout")
@@ -237,7 +249,7 @@ def migrate_project_layout(
         (target_user, target_pass, target_url),
     ) = _get_migration_config()
 
-    print(f"Syncing project layouts from {source_url} to {target_url}...")
+    logger.info(f"Syncing project layouts from {source_url} to {target_url}...")
 
     with make_client(
         source_url, credentials=(source_user, source_pass)
@@ -251,7 +263,7 @@ def migrate_project_layout(
             source_projects = old_client.projects.list()
 
         for sp in source_projects:
-            print(f"Processing project: {sp.name} (ID: {sp.id})...")
+            logger.info(f"Processing project: {sp.name} (ID: {sp.id})...")
             new_labels = _clone_labels(sp.get_labels())
 
             project_request = models.ProjectWriteRequest(
@@ -260,8 +272,8 @@ def migrate_project_layout(
             )
 
             created = new_client.projects.create(project_request)
-            print(
+            logger.info(
                 f"Created project '{created.name}' with ID {created.id} on target server."
             )
 
-    print("Project layout migration complete.")
+    logger.info("Project layout migration complete.")

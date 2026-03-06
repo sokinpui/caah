@@ -3,6 +3,7 @@ test*
 .env
 
 runs/
+*.log
 *.pt
 
 *.zip
