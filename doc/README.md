@@ -22,6 +22,7 @@ caah annotate --model ./weights/best.pt --task-id 42 --device gpu --conf 0.3
 ### `cvat` command
 
 A wrapper for interacting with the CVAT REST API.
+
 ```bash
 # List all projects
 caah cvat project list
@@ -39,43 +40,19 @@ Trains a YOLO model using a zipped dataset (typically exported from CVAT).
 #### Example
 
 ```bash
-# Train a YOLO11n model for 100 epochs
-caah train --data dataset.zip --model yolo11n --epochs 100 --device 0 --split 80:20
-
-# Train using a custom local model as base
-caah train --data dataset.zip --path ./weights/best.pt --epochs 50
+# Train with full custom parameters and NAS optimization
+caah train --data labels_only.zip --network-drive --split 8:2 --epochs 1000 --batch 32 --project "Bird-Detection" --name "YOLO11s-v1" --save-period 50 --workers 8
 ```
 
-### `convert` command
-# Import a project from a backup
-caah cvat project import my_project_backup.zip
+---
 
+## The "Golden Workflow" (NAS Optimized)
 
-# Import a dataset into a project
-caah cvat project import_dataset -u 1 --input-file /path/to/dataset.zip --format yolo
+If your images are stored on a NAS and mapped in CVAT as "Share" storage, use this workflow to avoid downloading massive datasets:
 
-Trains a YOLO model using a zipped dataset (typically exported from CVAT).
+1.`caah cvat project export_dataset --project-id 1 --no-images --output-file labels.zip` 2.`caah train --data labels.zip --network-drive --split 8:2`
 
-#### Example
-
-```bash
-# Train a YOLO11n model for 100 epochs
-caah train --data dataset.zip --model yolo11n --epochs 100 --device 0 --split 80:20
-
-# Train using a custom local model as base
-caah train --data dataset.zip --path ./weights/best.pt --epochs 50
-```
-
-### `convert` command
-
-Converts local datasets between different formats using Datumaro.
-
-#### Example
-
-```bash
-# Convert CVAT XML to YOLO format
-caah convert -i input.zip -o output.zip --from cvat --to yolo
-```
+_Note: This creates symlinks to the NAS images instead of copying them._
 
 ### `migrate` command
 
@@ -90,6 +67,7 @@ caah migrate task --task-id 123 --old-prefix /mnt/old/share --new-prefix /home/d
 # Sync all project structures and labels from source to target server
 caah migrate project-layout
 ```
+
 ---
 
 ## Command Reference
@@ -137,27 +115,13 @@ caah migrate project-layout
   - `--imgsz`: Input image size. Default: `640`.
   - `-b`, `--batch`: Batch size. Default: `16`.
   - `--device`: Training device (cpu, gpu, or ID). Default: `gpu`.
-  - `-s`, `--split`: Ratio to split dataset if not already split.
+  - `-s`, `--split`: Ratio to split dataset (e.g., 8:2).
+  - `--project`: Project name for experiment tracking.
+  - `--name`: Name of the specific training run.
+  - `--save-period`: Save a checkpoint every X epochs.
+  - `--workers`: Number of data loader workers. Default: `8`.
+  - `--network-drive`: Enable NAS optimization (requires `NAS_PATH` in `.env`).
 
-### `convert` command
-
-- **Description**: Convert dataset format locally.
-- **Options**:
-  - `-i`, `--input-file` (required): Path to source zip.
-  - `-o`, `--output-file` (required): Path for output zip.
-  - `-f`, `--from` (required): Source format (e.g., cvat, coco).
-  - `-t`, `--to` (required): Destination format (e.g., yolo, voc).
-  - **Action**: `list`
-    - **Description**: List all projects in the CVAT instance.
-  - **Action**: `create`
-    - **Description**: Create a new project.
-    - **Options**:
-      - `-n`, `--name` (required): Project name.
-  - **Action**: `delete`
-    - **Options**:
-      - `-f`, `--format`: Dataset format. Default: `YOLO 1.1`.
-      - `--no-images`: Do not include images in the export.
-      - `--only-manual`: Export only manual annotations.
   - **Action**: `backup`
     - **Description**: Export a project backup file.
     - **Options**:
@@ -195,13 +159,10 @@ caah migrate project-layout
 
 - **Description**: Perform auto-annotation on a CVAT task.
 - **Options**:
-  - `-m`, `--model`, `--task-id`, `--device`, `--conf`, `--ioa`, `--jobs`, `--batch`.
-
-### `train` command
-
-  - `-b`, `--batch`: Batch size. Default: `16`.
-  - `--device`: Training device (cpu, gpu, or ID). Default: `gpu`.
-  - `-s`, `--split`: Ratio to split dataset if not already split.
-  - `--network-drive`: Enable NAS optimization (requires `NAS_PATH` in `.env`).
-
-### `convert` command
+  - `-m`, `--model` (required): Path to model.
+  - `--task-id` (required): CVAT Task ID.
+  - `--device`: cpu or gpu.
+  - `--conf`: Confidence threshold (0.0-1.0).
+  - `--ioa`: IoA threshold to filter existing annotations.
+  - `--jobs`: Parallel workers for image fetching.
+  - `--batch`: Inference batch size.
