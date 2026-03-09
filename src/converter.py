@@ -1,8 +1,9 @@
+import concurrent.futures
 import json
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from datumaro.components.dataset import Dataset
 
@@ -14,12 +15,11 @@ def slice_coco_dataset(
     output_zip: Path,
     slice_size: Tuple[int, int] = (640, 640),
     overlap_ratio: Tuple[float, float] = (0.2, 0.2),
+    jobs: int = 4,
 ):
     """
     Slices a COCO dataset into tiles using SAHI.
     """
-    from sahi.slicing import slice_coco
-
     if not input_zip.is_file():
         raise FileNotFoundError(f"Input file not found: {input_zip}")
 
@@ -39,13 +39,12 @@ def slice_coco_dataset(
         if not json_files:
             raise FileNotFoundError("No COCO JSON annotation file found in the zip.")
 
-        for coco_path in json_files:
-            src_image_dir = _resolve_image_dir(extract_path, coco_path)
+        def _process_single_coco(coco_path: Path):
+            from sahi.slicing import slice_coco
 
-            # Use a temporary subdir to catch SAHI output and avoid name collisions
+            src_image_dir = _resolve_image_dir(extract_path, coco_path)
             with tempfile.TemporaryDirectory() as slice_tmp:
                 slice_tmp_path = Path(slice_tmp)
-
                 slice_coco(
                     coco_annotation_file_path=str(coco_path),
                     image_dir=str(src_image_dir),
@@ -55,18 +54,20 @@ def slice_coco_dataset(
                     slice_width=slice_size[1],
                     overlap_height_ratio=overlap_ratio[0],
                     overlap_width_ratio=overlap_ratio[1],
+                    verbose=0,
                 )
 
-                # Move generated JSONs to annotations/
                 for gj in slice_tmp_path.glob("*.json"):
                     shutil.move(str(gj), str(ann_dir / gj.name))
 
-                # Move images to images/
                 for item in slice_tmp_path.iterdir():
                     if item.is_dir():
                         shutil.copytree(item, img_dir / item.name, dirs_exist_ok=True)
                     elif item.is_file() and item.suffix.lower() != ".json":
                         shutil.move(str(item), str(img_dir / item.name))
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+            list(executor.map(_process_single_coco, json_files))
 
         create_zip(output_dir, output_zip)
 

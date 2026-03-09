@@ -44,6 +44,9 @@ def slice_dataset(
     overlap: Annotated[
         str, typer.Option("--overlap", help="Overlap ratio as H:W (0.0-1.0).")
     ] = "0.2:0.2",
+    jobs: Annotated[
+        int, typer.Option("--jobs", "-j", help="Number of parallel slicing jobs.")
+    ] = 4,
 ):
     """
     Slices/Tiles a COCO dataset into smaller patches.
@@ -51,7 +54,7 @@ def slice_dataset(
     sh, sw = map(int, size.split(":"))
     oh, ow = map(float, overlap.split(":"))
 
-    slice_coco_dataset(input_file, output_file, (sh, sw), (oh, ow))
+    slice_coco_dataset(input_file, output_file, (sh, sw), (oh, ow), jobs)
 
     print(output_file)
 
