@@ -1,10 +1,12 @@
 import concurrent.futures
 import json
+import math
 import shutil
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from sahi.slicing import slice_coco
 from datumaro.components.dataset import Dataset
 
 from utils import strip_prefix
@@ -30,8 +32,52 @@ def slice_coco_dataset(
         raise FileNotFoundError(f"No COCO JSON annotation file found in: {input_dir}")
 
     if nas_path:
+        # Fill images from NAS for all JSONs upfront (if needed)
         for json_file in json_files:
             _fill_coco_images_from_nas(json_file, input_dir, nas_path, nas_prefix)
+
+    # If there's exactly one JSON and we have multiple jobs, process it in parallel chunks
+    if len(json_files) == 1 and jobs > 1:
+        main_json = json_files[0]
+        with open(main_json, "r") as f:
+            full_data = json.load(f)
+
+        # Split the images into `jobs` chunks
+        images = full_data.get("images", [])
+        if not images:
+            print(f"Warning: No images found in {main_json}")
+            return
+
+        chunks = _split_coco_json(full_data, jobs)
+        chunk_dir = Path(tempfile.mkdtemp(prefix="coco_chunks_"))
+        chunk_paths = []
+
+        for i, chunk_data in enumerate(chunks):
+            chunk_file = chunk_dir / f"chunk_{i:03d}.json"
+            with open(chunk_file, "w") as f:
+                json.dump(chunk_data, f)
+            chunk_paths.append(chunk_file)
+
+        src_image_dir = _resolve_image_dir(input_dir, main_json)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+            futures = [
+                executor.submit(
+                    _slice_coco_chunk,
+                    chunk_path,
+                    src_image_dir,
+                    output_dir,
+                    slice_size,
+                    overlap_ratio,
+                )
+                for chunk_path in chunk_paths
+            ]
+            # Wait for all chunks to finish
+            for future in concurrent.futures.as_completed(futures):
+                future.result()  # Propagate exceptions
+
+        _merge_coco_jsons([output_dir / p.name for p in chunk_paths], output_dir / "annotations" / main_json.name)
+        return
 
     def _process_single_coco(coco_path: Path):
         from sahi.slicing import slice_coco
@@ -65,6 +111,96 @@ def slice_coco_dataset(
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
         list(executor.map(_process_single_coco, json_files))
 
+
+def _split_coco_json(full_data: dict, num_chunks: int) -> List[dict]:
+    """
+    Splits a COCO dataset into `num_chunks` subsets, distributing images
+    and their annotations evenly.
+    """
+    images = full_data.get("images", [])
+    annotations = full_data.get("annotations", [])
+    categories = full_data.get("categories", [])
+
+    # Group annotations by image_id
+    ann_by_img = {}
+    for ann in annotations:
+        ann_by_img.setdefault(ann["image_id"], []).append(ann)
+
+    # Split images into chunks
+    chunk_size = math.ceil(len(images) / num_chunks)
+    chunks = []
+    for i in range(0, len(images), chunk_size):
+        chunk_images = images[i:i + chunk_size]
+        img_ids = {img["id"] for img in chunk_images}
+        chunk_anns = []
+        for img_id in img_ids:
+            chunk_anns.extend(ann_by_img.get(img_id, []))
+        chunks.append({
+            "images": chunk_images,
+            "annotations": chunk_anns,
+            "categories": categories,
+        })
+    return chunks
+
+
+def _slice_coco_chunk(
+    chunk_path: Path,
+    image_dir: Path,
+    output_dir: Path,
+    slice_size: Tuple[int, int],
+    overlap_ratio: Tuple[float, float],
+) -> Path:
+    """
+    Worker that runs SAHI slice_coco on a single chunk JSON.
+    The sliced JSON is placed directly in `output_dir` with the same name as `chunk_path`.
+    """
+    slice_coco(
+        coco_annotation_file_path=str(chunk_path),
+        image_dir=str(image_dir),
+        output_coco_annotation_file_name=chunk_path.name,
+        output_dir=str(output_dir),
+        slice_height=slice_size[0],
+        slice_width=slice_size[1],
+        overlap_height_ratio=overlap_ratio[0],
+        overlap_width_ratio=overlap_ratio[1],
+        verbose=0,
+    )
+    return output_dir / chunk_path.name
+
+
+def _merge_coco_jsons(chunk_paths: List[Path], output_path: Path) -> None:
+    """
+    Merges multiple sliced COCO JSONs into one, reassigning image and annotation IDs
+    to avoid conflicts. The categories are taken from the first chunk.
+    """
+    all_images = []
+    all_annotations = []
+    categories = None
+
+    # Temporary ID mapping: old -> new
+    next_image_id = 1
+    next_ann_id = 1
+    for chunk_path in chunk_paths:
+        with open(chunk_path, "r") as f:
+            data = json.load(f)
+        if categories is None:
+            categories = data.get("categories", [])
+        for img in data.get("images", []):
+            old_id = img["id"]
+            img["id"] = next_image_id
+            all_images.append(img)
+            # Update annotation image_id references for this chunk
+            for ann in data.get("annotations", []):
+                if ann["image_id"] == old_id:
+                    ann["image_id"] = next_image_id
+                    ann["id"] = next_ann_id
+                    next_ann_id += 1
+                    all_annotations.append(ann)
+            next_image_id += 1
+
+    merged = {"images": all_images, "annotations": all_annotations, "categories": categories}
+    with open(output_path, "w") as f:
+        json.dump(merged, f)
 
 def _resolve_image_dir(extract_path: Path, coco_path: Path) -> Path:
     """
