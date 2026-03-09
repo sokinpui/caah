@@ -24,6 +24,7 @@ def slice_coco_dataset(
     if not input_dir.is_dir():
         raise NotADirectoryError(f"Input directory not found: {input_dir}")
 
+    output_dir = output_dir.resolve()
     img_dir = output_dir / "images"
     img_dir.mkdir(parents=True, exist_ok=True)
 
@@ -51,6 +52,7 @@ def slice_coco_dataset(
         chunks = _split_coco_json(full_data, jobs)
         chunk_dir = Path(tempfile.mkdtemp(prefix="coco_chunks_"))
         chunk_paths = []
+        sliced_json_paths = []
 
         for i, chunk_data in enumerate(chunks):
             chunk_file = chunk_dir / f"chunk_{i:03d}.json"
@@ -74,10 +76,10 @@ def slice_coco_dataset(
             ]
             # Wait for all chunks to finish
             for future in concurrent.futures.as_completed(futures):
-                future.result()  # Propagate exceptions
+                sliced_json_paths.append(future.result())
 
         _merge_coco_jsons(
-            [output_dir / p.name for p in chunk_paths],
+            sliced_json_paths,
             output_dir / "annotations" / main_json.name,
         )
         return
@@ -159,6 +161,9 @@ def _slice_coco_chunk(
     Worker that runs SAHI slice_coco on a single chunk JSON.
     The sliced JSON is placed directly in `output_dir` with the same name as `chunk_path`.
     """
+    from sahi.slicing import slice_coco
+    output_dir = Path(output_dir).resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
     slice_coco(
         coco_annotation_file_path=str(chunk_path),
         image_dir=str(image_dir),
@@ -185,29 +190,41 @@ def _merge_coco_jsons(chunk_paths: List[Path], output_path: Path) -> None:
     # Temporary ID mapping: old -> new
     next_image_id = 1
     next_ann_id = 1
+
     for chunk_path in chunk_paths:
+        if not chunk_path.exists():
+            continue
+
         with open(chunk_path, "r") as f:
             data = json.load(f)
+
         if categories is None:
             categories = data.get("categories", [])
+
+        img_id_map = {}
         for img in data.get("images", []):
-            old_id = img["id"]
-            img["id"] = next_image_id
-            all_images.append(img)
-            # Update annotation image_id references for this chunk
-            for ann in data.get("annotations", []):
-                if ann["image_id"] == old_id:
-                    ann["image_id"] = next_image_id
-                    ann["id"] = next_ann_id
-                    next_ann_id += 1
-                    all_annotations.append(ann)
+            old_id = img.get("id")
+            new_id = next_image_id
             next_image_id += 1
+            img_id_map[old_id] = new_id
+            img["id"] = new_id
+            all_images.append(img)
+
+        for ann in data.get("annotations", []):
+            old_img_id = ann.get("image_id")
+            if old_img_id in img_id_map:
+                ann["image_id"] = img_id_map[old_img_id]
+                ann["id"] = next_ann_id
+                next_ann_id += 1
+                all_annotations.append(ann)
 
     merged = {
         "images": all_images,
         "annotations": all_annotations,
         "categories": categories,
     }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(merged, f)
 
