@@ -30,7 +30,9 @@ def annotate(
     batch_size: Annotated[
         int, typer.Option("--batch", "-b", help="Inference batch size.")
     ] = 16,
-    sahi: Annotated[bool, typer.Option("--sahi", help="Enable Sliced Inference.")] = False,
+    sahi: Annotated[
+        bool, typer.Option("--sahi", help="Enable Sliced Inference.")
+    ] = False,
     slice_h: Annotated[int, typer.Option("--slice-h", help="SAHI slice height.")] = 640,
     slice_w: Annotated[int, typer.Option("--slice-w", help="SAHI slice width.")] = 640,
     overlap_h: Annotated[

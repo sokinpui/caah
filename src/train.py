@@ -8,7 +8,7 @@ import typer
 from dotenv import load_dotenv
 
 from data_utils import split_coco_dataset, split_dataset
-from utils import extract_zip, find_file, resolve_device
+from utils import find_file, resolve_device
 
 
 def train_model(
@@ -58,8 +58,8 @@ def train_model(
     print(best_model_path)
 
 
-def process_dataset_and_train(
-    dataset_zip_path: str,
+def prepare_and_train(
+    dataset_path: str,
     model_spec: str,
     epochs: int,
     img_size: int,
@@ -75,40 +75,32 @@ def process_dataset_and_train(
     name: Optional[str] = None,
     augmentations: Optional[list] = None,
 ):
-    """Extracts the dataset from a zip file and initiates the training process."""
-    zip_path = Path(dataset_zip_path)
-    if not zip_path.is_file() or zip_path.suffix.lower() != ".zip":
-        raise FileNotFoundError(
-            f"Dataset path is not a valid zip file: {dataset_zip_path}"
-        )
+    dataset_root = Path(dataset_path)
+    if not dataset_root.is_dir():
+        raise NotADirectoryError(f"Dataset directory not found: {dataset_path}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
-        extract_dir = tmpdir_path / "extracted"
-        extract_dir.mkdir()
-
-        print(f"Extracting dataset to temporary directory: {extract_dir}")
-        extract_zip(zip_path, extract_dir)
 
         if split and format == "yolo":
             print(f"Splitting dataset with ratio {split}...")
             split_dir = tmpdir_path / "split"
             split_dir.mkdir()
             data_yaml_path = split_dataset(
-                extract_dir, split_dir, split, nas_path=nas_path, nas_prefix=nas_prefix
+                dataset_root, split_dir, split, nas_path=nas_path, nas_prefix=nas_prefix
             )
         elif split and format == "coco":
             print(f"Splitting COCO dataset with ratio {split}...")
             split_dir = tmpdir_path / "split"
             split_dir.mkdir()
             data_yaml_path = split_coco_dataset(
-                extract_dir, split_dir, split, nas_path=nas_path, nas_prefix=nas_prefix
+                dataset_root, split_dir, split, nas_path=nas_path, nas_prefix=nas_prefix
             )
         else:
-            data_yaml_path = find_file(extract_dir, ["data.yaml"])
+            data_yaml_path = find_file(dataset_root, ["data.yaml"])
 
         if not data_yaml_path:
-            raise FileNotFoundError(f"Could not find 'data.yaml' in {extract_dir}")
+            raise FileNotFoundError(f"Could not find 'data.yaml' in {dataset_path}")
 
         train_model(
             data_yaml_path,
@@ -151,7 +143,7 @@ def _load_custom_augmentations(file_path: Path) -> list:
 
 
 def train(
-    data: Annotated[str, typer.Option("--data", "-d", help="Zipped dataset path.")],
+    data: Annotated[str, typer.Option("--data", "-d", help="Dataset directory path.")],
     model: Annotated[
         str, typer.Option("--model", "-m", help="YOLO model version.")
     ] = "yolo11n",
@@ -209,8 +201,8 @@ def train(
     if augmentation:
         custom_aug = _load_custom_augmentations(augmentation)
 
-    process_dataset_and_train(
-        dataset_zip_path=data,
+    prepare_and_train(
+        dataset_path=data,
         model_spec=model_spec,
         epochs=epochs,
         img_size=imgsz,

@@ -7,32 +7,24 @@ from typing import List, Optional, Tuple
 
 from datumaro.components.dataset import Dataset
 
-from utils import create_zip, extract_zip, strip_prefix
+from utils import strip_prefix
 
 
 def slice_coco_dataset(
-    input_zip: Path,
-    output_zip: Path,
+    input_dir: Path,
+    output_dir: Path,
     slice_size: Tuple[int, int] = (640, 640),
     overlap_ratio: Tuple[float, float] = (0.2, 0.2),
     jobs: int = 4,
     nas_path: Optional[Path] = None,
     nas_prefix: str = "",
 ):
-    """
-    Slices a COCO dataset into tiles using SAHI.
-    """
-    if not input_zip.is_file():
-        raise FileNotFoundError(f"Input file not found: {input_zip}")
+    if not input_dir.is_dir():
+        raise NotADirectoryError(f"Input directory not found: {input_dir}")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         working_dir = Path(tmp_dir)
-        extract_path = working_dir / "extract"
-        output_dir = working_dir / "sliced"
-
-        ann_dir = output_dir / "annotations"
         img_dir = output_dir / "images"
-        ann_dir.mkdir(parents=True, exist_ok=True)
         img_dir.mkdir(parents=True, exist_ok=True)
 
         extract_zip(input_zip, extract_path)
@@ -42,13 +34,13 @@ def slice_coco_dataset(
             raise FileNotFoundError("No COCO JSON annotation file found in the zip.")
 
         if nas_path:
-            for jf in json_files:
-                _fill_coco_images_from_nas(jf, extract_path, nas_path, nas_prefix)
+            for json_file in json_files:
+                _fill_coco_images_from_nas(json_file, input_dir, nas_path, nas_prefix)
 
         def _process_single_coco(coco_path: Path):
             from sahi.slicing import slice_coco
 
-            src_image_dir = _resolve_image_dir(extract_path, coco_path)
+            src_image_dir = _resolve_image_dir(input_dir, coco_path)
             with tempfile.TemporaryDirectory() as slice_tmp:
                 slice_tmp_path = Path(slice_tmp)
                 slice_coco(
@@ -64,7 +56,9 @@ def slice_coco_dataset(
                 )
 
                 for gj in slice_tmp_path.glob("*.json"):
-                    shutil.move(str(gj), str(ann_dir / gj.name))
+                    target_ann = output_dir / "annotations"
+                    target_ann.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(gj), str(target_ann / gj.name))
 
                 for item in slice_tmp_path.iterdir():
                     if item.is_dir():
@@ -74,8 +68,6 @@ def slice_coco_dataset(
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
             list(executor.map(_process_single_coco, json_files))
-
-        create_zip(output_dir, output_zip)
 
 
 def _resolve_image_dir(extract_path: Path, coco_path: Path) -> Path:
@@ -115,53 +107,28 @@ def _resolve_image_dir(extract_path: Path, coco_path: Path) -> Path:
     return extract_path
 
 
-def coco_to_yolo(input_zip: Path, output_zip: Path):
-    """
-    Converts a COCO format ZIP dataset to YOLO format.
-    """
-    if not input_zip.is_file():
-        raise FileNotFoundError(f"Input file not found: {input_zip}")
+def coco_to_yolo(input_dir: Path, output_dir: Path):
+    if not input_dir.is_dir():
+        raise NotADirectoryError(f"Input directory not found: {input_dir}")
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        working_dir = Path(tmp_dir)
-        extract_path = working_dir / "extract"
-        export_path = working_dir / "export"
-
-        extract_zip(input_zip, extract_path)
-
-        dataset = Dataset.import_from(str(extract_path), format="coco")
-        dataset.export(str(export_path), format="yolo", save_media=True)
-
-        create_zip(export_path, output_zip)
+    dataset = Dataset.import_from(str(input_dir), format="coco")
+    dataset.export(str(output_dir), format="yolo", save_media=True)
 
 
 def yolo_to_coco(
-    input_zip: Path,
-    output_zip: Path,
+    input_dir: Path,
+    output_dir: Path,
     nas_path: Optional[Path] = None,
     nas_prefix: str = "",
 ):
-    """
-    Converts a YOLO format ZIP dataset to COCO instances format.
-    Handles datasets with or without images automatically via Datumaro.
-    """
-    if not input_zip.is_file():
-        raise FileNotFoundError(f"Input file not found: {input_zip}")
+    if not input_dir.is_dir():
+        raise NotADirectoryError(f"Input directory not found: {input_dir}")
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        working_dir = Path(tmp_dir)
-        extract_path = working_dir / "extract"
-        export_path = working_dir / "export"
+    if nas_path:
+        _fill_images_from_nas(input_dir, nas_path, nas_prefix)
 
-        extract_zip(input_zip, extract_path)
-
-        if nas_path:
-            _fill_images_from_nas(extract_path, nas_path, nas_prefix)
-
-        dataset = Dataset.import_from(str(extract_path), format="yolo")
-        dataset.export(str(export_path), format="coco_instances", save_media=True)
-
-        create_zip(export_path, output_zip)
+    dataset = Dataset.import_from(str(input_dir), format="yolo")
+    dataset.export(str(output_dir), format="coco_instances", save_media=True)
 
 
 def _fill_images_from_nas(extract_path: Path, nas_path: Path, nas_prefix: str):

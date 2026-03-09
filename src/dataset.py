@@ -15,29 +15,28 @@ dataset_app = typer.Typer(
 
 @dataset_app.command("yolo2coco")
 def yolo2coco(
-    input_file: Annotated[Path, typer.Argument(help="Input YOLO .zip file.")],
-    output_file: Annotated[Path, typer.Argument(help="Output COCO .zip file.")],
+    input_dir: Annotated[Path, typer.Argument(help="Input YOLO directory.")],
+    output_dir: Annotated[Path, typer.Argument(help="Output COCO directory.")],
 ):
     """
     Converts a dataset from YOLO to COCO format.
     """
-    load_dotenv()
     nas_path_str = os.getenv("NAS_PATH")
     nas_prefix = os.getenv("NAS_PREFIX", "")
 
     yolo_to_coco(
-        input_file,
-        output_file,
+        input_dir,
+        output_dir,
         nas_path=Path(nas_path_str) if nas_path_str else None,
         nas_prefix=nas_prefix,
     )
-    print(output_file)
+    print(output_dir)
 
 
 @dataset_app.command("slice")
 def slice_dataset(
-    input_file: Annotated[Path, typer.Argument(help="Input COCO .zip file.")],
-    output_file: Annotated[Path, typer.Argument(help="Output sliced COCO .zip file.")],
+    input_dir: Annotated[Path, typer.Argument(help="Input COCO directory.")],
+    output_dir: Annotated[Path, typer.Argument(help="Output sliced COCO directory.")],
     size: Annotated[
         str, typer.Option("--size", help="Slice size as H:W (pixels).")
     ] = "640:640",
@@ -60,7 +59,6 @@ def slice_dataset(
     sh, sw = map(int, size.split(":"))
     oh, ow = map(float, overlap.split(":"))
 
-    load_dotenv()
     nas_path_str = os.getenv("NAS_PATH") if nas else None
     nas_prefix = os.getenv("NAS_PREFIX", "")
 
@@ -68,8 +66,8 @@ def slice_dataset(
         raise ValueError("--nas requires NAS_PATH in .env")
 
     slice_coco_dataset(
-        input_file,
-        output_file,
+        input_dir,
+        output_dir,
         (sh, sw),
         (oh, ow),
         jobs,
@@ -77,16 +75,16 @@ def slice_dataset(
         nas_prefix=nas_prefix,
     )
 
-    print(output_file)
+    print(output_dir)
 
 
 @dataset_app.command("coco2yolo")
 def coco2yolo(
-    input_file: Annotated[Path, typer.Argument(help="Input COCO .zip file.")],
-    output_file: Annotated[Path, typer.Argument(help="Output YOLO .zip file.")],
+    input_dir: Annotated[Path, typer.Argument(help="Input COCO directory.")],
+    output_dir: Annotated[Path, typer.Argument(help="Output YOLO directory.")],
 ):
     """
     Converts a dataset from COCO to YOLO format.
     """
-    coco_to_yolo(input_file, output_file)
-    print(output_file)
+    coco_to_yolo(input_dir, output_dir)
+    print(output_dir)

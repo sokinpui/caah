@@ -68,9 +68,15 @@ class YoloModel:
         all_annotations = []
         result_idx = 0
 
-        return self._format_results(sources, results) if is_batch else self._format_results(sources, results)[0]
+        return (
+            self._format_results(sources, results)
+            if is_batch
+            else self._format_results(sources, results)[0]
+        )
 
-    def _format_results(self, sources: List[Any], results: List[Any]) -> List[List[Dict]]:
+    def _format_results(
+        self, sources: List[Any], results: List[Any]
+    ) -> List[List[Dict]]:
         """Standardizes output from both native YOLO and SAHI results."""
         all_annotations = []
         result_idx = 0
@@ -116,8 +122,8 @@ class YoloModel:
 
     def _predict_sahi(self, image: Any, **kwargs) -> Any:
         """Internal helper for SAHI sliced inference."""
-        from sahi.predict import get_sliced_prediction
         import numpy as np
+        from sahi.predict import get_sliced_prediction
 
         if self._sahi_model is None:
             from sahi import AutoDetectionModel
@@ -130,9 +136,9 @@ class YoloModel:
             )
 
         # Convert PIL Image to numpy array if needed
-        if hasattr(image, 'mode') and hasattr(image, 'convert'):
+        if hasattr(image, "mode") and hasattr(image, "convert"):
             # Assume PIL Image
-            image = np.array(image.convert('RGB'))
+            image = np.array(image.convert("RGB"))
 
         return get_sliced_prediction(
             image,
