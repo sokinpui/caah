@@ -55,8 +55,8 @@ Export the project or task from CVAT in **YOLO 1.1** format. Ensure images are i
 ```bash
 caah cvat project export_dataset \
   --project-id 1 \
-  --images \
-  --output-file raw_dataset.zip
+  --no-images \
+  --output-file yolo_dataset.zip
 ```
 
 ### 3.2 Format Conversion (YOLO to COCO)
@@ -64,7 +64,7 @@ caah cvat project export_dataset \
 The slicing utility requires COCO format.
 
 ```bash
-caah dataset yolo2coco raw_dataset.zip raw_coco.zip
+caah dataset yolo2coco yolo_dataset.zip coco_dataset.zip
 ```
 
 ### 3.3 Dataset Slicing
@@ -72,7 +72,7 @@ caah dataset yolo2coco raw_dataset.zip raw_coco.zip
 Tile the images into smaller patches (e.g., 640x640). This is critical for detecting small objects in large frames.
 
 ```bash
-caah dataset slice raw_coco.zip sliced_coco.zip --size 640:640 --overlap 0.2:0.2
+caah dataset slice coco_dataset.zip sliced_coco.zip --size 640:640 --overlap 0.2:0.2
 ```
 
 ### 3.4 Format Conversion (COCO to YOLO)
