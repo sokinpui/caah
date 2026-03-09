@@ -30,6 +30,15 @@ def annotate(
     batch_size: Annotated[
         int, typer.Option("--batch", "-b", help="Inference batch size.")
     ] = 16,
+    sahi: Annotated[bool, typer.Option("--sahi", help="Enable Sliced Inference.")] = False,
+    slice_h: Annotated[int, typer.Option("--slice-h", help="SAHI slice height.")] = 640,
+    slice_w: Annotated[int, typer.Option("--slice-w", help="SAHI slice width.")] = 640,
+    overlap_h: Annotated[
+        float, typer.Option("--overlap-h", help="SAHI overlap height ratio.")
+    ] = 0.2,
+    overlap_w: Annotated[
+        float, typer.Option("--overlap-w", help="SAHI overlap width ratio.")
+    ] = 0.2,
 ) -> None:
     """Main execution flow for auto-annotation."""
     load_dotenv()
@@ -96,7 +105,14 @@ def annotate(
                 )
 
                 # Batch Inference
-                batch_results = model.predict(images)
+                batch_results = model.predict(
+                    images,
+                    sahi=sahi,
+                    slice_h=slice_h,
+                    slice_w=slice_w,
+                    overlap_h=overlap_h,
+                    overlap_w=overlap_w,
+                )
 
                 # Post-process
                 for fid, frame_preds in zip(frame_ids, batch_results):
@@ -189,6 +205,8 @@ def _process_predictions(
                 source="auto",
             )
         )
+
+    return new_shapes, dropped_ids
 
 
 def _get_frame_image(
