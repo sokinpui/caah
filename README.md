@@ -87,6 +87,9 @@ caah dataset yolo2coco dataset_yolo dataset_coco
 # Slice images into 640x640 tiles with 20% overlap
 caah dataset slice dataset_coco sliced_coco --size 640:640 --overlap 0.2:0.2
 
+# Slice images into 640x640 tiles with 20% overlap with 40 workers
+caah dataset slice dataset_coco sliced_coco --size 640:640 --overlap 0.2:0.2 -j 40
+
 # Convert sliced COCO back to YOLO for training
 caah dataset coco2yolo sliced_coco sliced_yolo
 ```
@@ -105,21 +108,6 @@ caah train \
   --workers 8 \
   --save-period 10 \
   --split 8:2 \
-  --format yolo \
-  --augmentation my_aug.py  # Path to .py file defining custom_transforms.
-
-# train with COCO dataset
-caah train \
-  --data sliced_coco \
-  --model yolo11n \
-  --epochs 50 \
-  --imgsz 640 \
-  --batch 16 \
-  --device gpu \
-  --workers 8 \
-  --save-period 10 \
-  --split 8:2 \
-  --format coco \
   --augmentation my_aug.py  # Path to .py file defining custom_transforms.
 ```
 
