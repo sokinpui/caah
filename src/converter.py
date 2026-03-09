@@ -22,52 +22,48 @@ def slice_coco_dataset(
     if not input_dir.is_dir():
         raise NotADirectoryError(f"Input directory not found: {input_dir}")
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        working_dir = Path(tmp_dir)
-        img_dir = output_dir / "images"
-        img_dir.mkdir(parents=True, exist_ok=True)
+    img_dir = output_dir / "images"
+    img_dir.mkdir(parents=True, exist_ok=True)
 
-        extract_zip(input_zip, extract_path)
+    json_files = sorted(list(input_dir.rglob("*.json")))
+    if not json_files:
+        raise FileNotFoundError(f"No COCO JSON annotation file found in: {input_dir}")
 
-        json_files = sorted(list(extract_path.rglob("*.json")))
-        if not json_files:
-            raise FileNotFoundError("No COCO JSON annotation file found in the zip.")
+    if nas_path:
+        for json_file in json_files:
+            _fill_coco_images_from_nas(json_file, input_dir, nas_path, nas_prefix)
 
-        if nas_path:
-            for json_file in json_files:
-                _fill_coco_images_from_nas(json_file, input_dir, nas_path, nas_prefix)
+    def _process_single_coco(coco_path: Path):
+        from sahi.slicing import slice_coco
 
-        def _process_single_coco(coco_path: Path):
-            from sahi.slicing import slice_coco
+        src_image_dir = _resolve_image_dir(input_dir, coco_path)
+        with tempfile.TemporaryDirectory() as slice_tmp:
+            slice_tmp_path = Path(slice_tmp)
+            slice_coco(
+                coco_annotation_file_path=str(coco_path),
+                image_dir=str(src_image_dir),
+                output_coco_annotation_file_name=coco_path.name,
+                output_dir=str(slice_tmp_path),
+                slice_height=slice_size[0],
+                slice_width=slice_size[1],
+                overlap_height_ratio=overlap_ratio[0],
+                overlap_width_ratio=overlap_ratio[1],
+                verbose=0,
+            )
 
-            src_image_dir = _resolve_image_dir(input_dir, coco_path)
-            with tempfile.TemporaryDirectory() as slice_tmp:
-                slice_tmp_path = Path(slice_tmp)
-                slice_coco(
-                    coco_annotation_file_path=str(coco_path),
-                    image_dir=str(src_image_dir),
-                    output_coco_annotation_file_name=coco_path.name,
-                    output_dir=str(slice_tmp_path),
-                    slice_height=slice_size[0],
-                    slice_width=slice_size[1],
-                    overlap_height_ratio=overlap_ratio[0],
-                    overlap_width_ratio=overlap_ratio[1],
-                    verbose=0,
-                )
+            for gj in slice_tmp_path.glob("*.json"):
+                target_ann = output_dir / "annotations"
+                target_ann.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(gj), str(target_ann / gj.name))
 
-                for gj in slice_tmp_path.glob("*.json"):
-                    target_ann = output_dir / "annotations"
-                    target_ann.mkdir(parents=True, exist_ok=True)
-                    shutil.move(str(gj), str(target_ann / gj.name))
+            for item in slice_tmp_path.iterdir():
+                if item.is_dir():
+                    shutil.copytree(item, img_dir / item.name, dirs_exist_ok=True)
+                elif item.is_file() and item.suffix.lower() != ".json":
+                    shutil.move(str(item), str(img_dir / item.name))
 
-                for item in slice_tmp_path.iterdir():
-                    if item.is_dir():
-                        shutil.copytree(item, img_dir / item.name, dirs_exist_ok=True)
-                    elif item.is_file() and item.suffix.lower() != ".json":
-                        shutil.move(str(item), str(img_dir / item.name))
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
-            list(executor.map(_process_single_coco, json_files))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+        list(executor.map(_process_single_coco, json_files))
 
 
 def _resolve_image_dir(extract_path: Path, coco_path: Path) -> Path:
