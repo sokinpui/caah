@@ -60,7 +60,7 @@ def slice_coco_dataset(
 
         src_image_dir = _resolve_image_dir(input_dir, main_json)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=jobs) as executor:
             futures = [
                 executor.submit(
                     _slice_coco_chunk,
