@@ -7,7 +7,7 @@ from typing import Annotated, Optional
 import typer
 from dotenv import load_dotenv
 
-from data_utils import split_dataset
+from data_utils import split_coco_dataset, split_dataset
 from utils import extract_zip, find_file, resolve_device
 
 
@@ -65,6 +65,7 @@ def process_dataset_and_train(
     img_size: int,
     batch_size: int,
     device: str,
+    format: str = "yolo",
     split: Optional[str] = None,
     nas_path: Optional[str] = None,
     nas_prefix: str = "",
@@ -89,11 +90,18 @@ def process_dataset_and_train(
         print(f"Extracting dataset to temporary directory: {extract_dir}")
         extract_zip(zip_path, extract_dir)
 
-        if split:
+        if split and format == "yolo":
             print(f"Splitting dataset with ratio {split}...")
             split_dir = tmpdir_path / "split"
             split_dir.mkdir()
             data_yaml_path = split_dataset(
+                extract_dir, split_dir, split, nas_path=nas_path, nas_prefix=nas_prefix
+            )
+        elif split and format == "coco":
+            print(f"Splitting COCO dataset with ratio {split}...")
+            split_dir = tmpdir_path / "split"
+            split_dir.mkdir()
+            data_yaml_path = split_coco_dataset(
                 extract_dir, split_dir, split, nas_path=nas_path, nas_prefix=nas_prefix
             )
         else:
@@ -174,6 +182,10 @@ def train(
         ),
     ] = None,
     network_drive: bool = False,
+    format: Annotated[
+        str,
+        typer.Option("--format", help="Dataset format: 'yolo' or 'coco'."),
+    ] = "yolo",
 ):
     """Main entry point for the training command."""
     load_dotenv()
@@ -199,6 +211,7 @@ def train(
         img_size=imgsz,
         batch_size=batch,
         device=device,
+        format=format.lower(),
         split=split,
         nas_path=nas_path,
         nas_prefix=nas_prefix,
