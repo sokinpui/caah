@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple
 
 from datumaro.components.dataset import Dataset
 
-from utils import create_zip, extract_zip
+from utils import create_zip, extract_zip, strip_prefix
 
 
 def slice_coco_dataset(
@@ -16,6 +16,8 @@ def slice_coco_dataset(
     slice_size: Tuple[int, int] = (640, 640),
     overlap_ratio: Tuple[float, float] = (0.2, 0.2),
     jobs: int = 4,
+    nas_path: Optional[Path] = None,
+    nas_prefix: str = "",
 ):
     """
     Slices a COCO dataset into tiles using SAHI.
@@ -38,6 +40,10 @@ def slice_coco_dataset(
         json_files = sorted(list(extract_path.rglob("*.json")))
         if not json_files:
             raise FileNotFoundError("No COCO JSON annotation file found in the zip.")
+
+        if nas_path:
+            for jf in json_files:
+                _fill_coco_images_from_nas(jf, extract_path, nas_path, nas_prefix)
 
         def _process_single_coco(coco_path: Path):
             from sahi.slicing import slice_coco
@@ -183,3 +189,24 @@ def _fill_images_from_nas(extract_path: Path, nas_path: Path, nas_prefix: str):
             if nas_img.exists():
                 shutil.copy2(nas_img, lbl.with_suffix(ext))
                 break
+
+
+def _fill_coco_images_from_nas(
+    coco_path: Path, extract_path: Path, nas_path: Path, nas_prefix: str
+):
+    """Locates and symlinks missing COCO images from NAS into extraction directory."""
+    with open(coco_path, "r") as f:
+        data = json.load(f)
+
+    for img in data.get("images", []):
+        file_name = img["file_name"]
+        local_path = extract_path / file_name
+        if local_path.exists():
+            continue
+
+        clean_rel_p = strip_prefix(file_name, nas_prefix)
+        nas_img = nas_path / clean_rel_p
+
+        if nas_img.exists():
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            local_path.symlink_to(nas_img)

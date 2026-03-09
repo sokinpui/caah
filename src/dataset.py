@@ -47,6 +47,12 @@ def slice_dataset(
     jobs: Annotated[
         int, typer.Option("--jobs", "-j", help="Number of parallel slicing jobs.")
     ] = 4,
+    nas: Annotated[
+        bool,
+        typer.Option(
+            "--nas", help="Enable NAS optimization (requires NAS_PATH in .env)."
+        ),
+    ] = False,
 ):
     """
     Slices/Tiles a COCO dataset into smaller patches.
@@ -54,7 +60,22 @@ def slice_dataset(
     sh, sw = map(int, size.split(":"))
     oh, ow = map(float, overlap.split(":"))
 
-    slice_coco_dataset(input_file, output_file, (sh, sw), (oh, ow), jobs)
+    load_dotenv()
+    nas_path_str = os.getenv("NAS_PATH") if nas else None
+    nas_prefix = os.getenv("NAS_PREFIX", "")
+
+    if nas and not nas_path_str:
+        raise ValueError("--nas requires NAS_PATH in .env")
+
+    slice_coco_dataset(
+        input_file,
+        output_file,
+        (sh, sw),
+        (oh, ow),
+        jobs,
+        nas_path=Path(nas_path_str) if nas_path_str else None,
+        nas_prefix=nas_prefix,
+    )
 
     print(output_file)
 
