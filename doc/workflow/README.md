@@ -59,12 +59,13 @@ caah cvat project export_dataset \
   --output-file yolo_dataset.zip
 ```
 
-### 3.2 Format Conversion (YOLO to COCO)
+### 3.2 Unzip and Format Conversion (YOLO to COCO)
 
-The slicing utility requires COCO format.
+The slicing utility requires COCO format and operates on directories.
 
 ```bash
-caah dataset yolo2coco yolo_dataset.zip coco_dataset.zip
+unzip yolo_dataset.zip -d yolo_dataset
+caah dataset yolo2coco yolo_dataset coco_dataset
 ```
 
 ### 3.3 Dataset Slicing
@@ -72,7 +73,7 @@ caah dataset yolo2coco yolo_dataset.zip coco_dataset.zip
 Tile the images into smaller patches (e.g., 640x640). This is critical for detecting small objects in large frames.
 
 ```bash
-caah dataset slice coco_dataset.zip sliced_coco.zip --size 640:640 --overlap 0.2:0.2
+caah dataset slice coco_dataset sliced_coco --size 640:640 --overlap 0.2:0.2
 ```
 
 ### 3.4 Format Conversion (COCO to YOLO)
@@ -80,7 +81,7 @@ caah dataset slice coco_dataset.zip sliced_coco.zip --size 640:640 --overlap 0.2
 Convert the sliced patches back to YOLO format for training.
 
 ```bash
-caah dataset coco2yolo sliced_coco.zip sliced_yolo.zip
+caah dataset coco2yolo sliced_coco sliced_yolo
 ```
 
 ## 4. Training

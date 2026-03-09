@@ -48,25 +48,25 @@ Utilities for format conversion and image tiling.
 
 ```bash
 # Convert YOLO export to COCO (required for slicing)
-caah dataset yolo2coco input_yolo.zip output_coco.zip
+caah dataset yolo2coco input_yolo output_coco
 
 # Slice a COCO dataset into 640x640 tiles with 20% overlap
-caah dataset slice input_coco.zip sliced_coco.zip --size 640:640 --overlap 0.2:0.2
+caah dataset slice input_coco sliced_coco --size 640:640 --overlap 0.2:0.2
 
 # Convert sliced COCO back to YOLO for training
-caah dataset coco2yolo sliced_coco.zip sliced_yolo.zip
+caah dataset coco2yolo sliced_coco sliced_yolo
 ```
 
 
 ### `train` command
 
-Trains a YOLO model using a zipped dataset (typically exported from CVAT).
+Trains a YOLO model using a dataset directory.
 
 #### Example
 
 ```bash
 # Train with custom augmentations and NAS optimization
-caah train --data labels_only.zip --nas --split 8:2 --augmentation ./my_aug.py --project "Bird-Detection" --name "YOLO11s-v1"
+caah train --data labels_only_dir --nas --split 8:2 --augmentation ./my_aug.py --project "Bird-Detection" --name "YOLO11s-v1"
 ```
 
 ---
@@ -75,7 +75,8 @@ caah train --data labels_only.zip --nas --split 8:2 --augmentation ./my_aug.py -
 If your images are stored on a NAS and mapped in CVAT as "Share" storage, use this workflow to avoid downloading massive datasets:
 
 1.  **Export Labels**: `caah cvat project export_dataset --project-id 1 --no-images --output-file labels.zip`
-2.  **Train**: `caah train --data labels.zip --nas --split 8:2`
+2.  **Unzip**: `unzip labels.zip -d labels_dir`
+3.  **Train**: `caah train --data labels_dir --nas --split 8:2`
 
 *Note: This creates symlinks to the NAS images instead of copying them to the local machine.*
 
@@ -136,7 +137,7 @@ caah migrate project-layout
 
 - **Description**: Train a YOLO model.
 - **Options**:
-  - `-d`, `--data` (required): Path to the zipped dataset file.
+  - `-d`, `--data` (required): Path to the dataset directory.
   - `-m`, `--model`: YOLO model version (e.g., yolo11n). Default: `yolo11n`.
   - `-p`, `--path`: Path to a custom local model file (.pt).
   - `-e`, `--epochs`: Number of training epochs. Default: `50`.

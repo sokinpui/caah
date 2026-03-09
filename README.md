@@ -78,14 +78,17 @@ caah cvat project export_dataset \
 ### 2. Dataset Conversion & Slicing (SAHI)
 
 ```bash
+# Unzip the export first
+unzip dataset_yolo.zip -d dataset_yolo
+
 # Convert YOLO to COCO
-caah dataset yolo2coco dataset_yolo.zip dataset_coco.zip
+caah dataset yolo2coco dataset_yolo dataset_coco
 
 # Slice images into 640x640 tiles with 20% overlap
-caah dataset slice dataset_coco.zip sliced_coco.zip --size 640:640 --overlap 0.2:0.2
+caah dataset slice dataset_coco sliced_coco --size 640:640 --overlap 0.2:0.2
 
 # Convert sliced COCO back to YOLO for training
-caah dataset coco2yolo sliced_coco.zip sliced_yolo.zip
+caah dataset coco2yolo sliced_coco sliced_yolo
 ```
 
 ### 3. Training
@@ -93,7 +96,7 @@ caah dataset coco2yolo sliced_coco.zip sliced_yolo.zip
 ```bash
 # train with YOLO dataset
 caah train \
-  --data sliced_yolo.zip \
+  --data sliced_yolo \
   --model yolo11n \
   --epochs 50 \
   --imgsz 640 \
@@ -107,7 +110,7 @@ caah train \
 
 # train with COCO dataset
 caah train \
-  --data sliced_yolo.zip \
+  --data sliced_coco \
   --model yolo11n \
   --epochs 50 \
   --imgsz 640 \
