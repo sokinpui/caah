@@ -8,8 +8,20 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import yaml
+from ultralytics.data.split import autosplit
 
 from utils import find_file, strip_prefix
+
+
+def _parse_split_ratio(split_str: str) -> List[int]:
+    """Parses split ratio string into list of integers."""
+    try:
+        parts = [int(v) for v in split_str.split(":")]
+        if len(parts) == 2 and sum(parts) > 0:
+            return parts
+    except (ValueError, IndexError, ZeroDivisionError):
+        pass
+    raise ValueError(f"Invalid split ratio '{split_str}'. Expected 'train:val' (e.g. 8:2)")
 
 
 def split_coco_dataset(
@@ -20,12 +32,8 @@ def split_coco_dataset(
     nas_prefix: str = "",
 ) -> Path:
     """Splits a COCO dataset into train/val sets by partitioning the JSON."""
-    try:
-        train_ratio_str, val_ratio_str = split_str.split(":")
-        train_frac = int(train_ratio_str) / (int(train_ratio_str) + int(val_ratio_str))
-    except (ValueError, ZeroDivisionError):
-        print(f"Error: Invalid split ratio '{split_str}'.", file=sys.stderr)
-        sys.exit(1)
+    ratios = _parse_split_ratio(split_str)
+    train_frac = ratios[0] / sum(ratios)
 
     coco_json = find_file(source_dir, ["*.json"])
     if not coco_json:
@@ -69,12 +77,21 @@ def split_coco_dataset(
     file_index = _index_directory(source_dir if not nas_path else Path(nas_path))
 
     _prepare_coco_images(
-        train_images, source_dir, dest_dir / "images" / "train", file_index, nas_path, nas_prefix
+        train_images,
+        source_dir,
+        dest_dir / "images" / "train",
+        file_index,
+        nas_path,
+        nas_prefix,
     )
     _prepare_coco_images(
-        val_images, source_dir, dest_dir / "images" / "val", file_index, nas_path, nas_prefix
+        val_images,
+        source_dir,
+        dest_dir / "images" / "val",
+        file_index,
+        nas_path,
+        nas_prefix,
     )
-
 
     yaml_path = dest_dir / "data.yaml"
     yaml_data = {
@@ -105,78 +122,49 @@ def split_dataset(
     nas_path: Optional[str] = None,
     nas_prefix: str = "",
 ) -> Path:
-    """Splits files from source_dir into train/val sets in dest_dir."""
-    try:
-        train_ratio_str, val_ratio_str = split_str.split(":")
-        train_frac = int(train_ratio_str) / (int(train_ratio_str) + int(val_ratio_str))
-    except (ValueError, ZeroDivisionError):
-        print(f"Error: Invalid split ratio '{split_str}'.", file=sys.stderr)
-        sys.exit(1)
-
-    image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
-
+    """Splits YOLO dataset files into train/val sets."""
+    ratios = _parse_split_ratio(split_str)
+    total = sum(ratios)
+    weights = (ratios[0] / total, ratios[1] / total, 0.0)
     labels_root = (
         source_dir / "obj_train_data"
         if (source_dir / "obj_train_data").is_dir()
         else source_dir
     )
     search_dir = Path(nas_path) if nas_path else labels_root
-    
-    # Index images once to avoid repeated disk scanning
-    image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
-    print(f"Indexing images in {search_dir}...")
-    image_index = _index_directory(search_dir, image_extensions)
 
-    label_paths = list(labels_root.rglob("*.txt"))
+    autosplit(path=search_dir, weights=weights, annotated_only=False)
 
-    image_label_pairs = []
-    for lp in label_paths:
-        rel_lp = lp.relative_to(labels_root)
-        rel_lp_str = str(rel_lp)
+    label_index = _index_directory(labels_root, [".txt"])
 
-        # Strip prefix to find in NAS
-        clean_rel_p = strip_prefix(rel_lp_str, nas_prefix)
+    for split_name in ["train", "val"]:
+        split_file = search_dir.parent / f"autosplit_{split_name}.txt"
+        if not split_file.exists():
+            continue
 
-        # Match label with indexed image
-        img_name = Path(clean_rel_p).name
-        if img_name in image_index:
-             image_label_pairs.append((image_index[img_name], lp))
+        with open(split_file, "r") as f:
+            img_paths = [search_dir.parent / line.strip() for line in f if line.strip()]
 
-    if not image_label_pairs:
-        print(f"Error: No matching images found in {search_dir}.", file=sys.stderr)
-        sys.exit(1)
-
-    class_names = find_class_names(source_dir)
-    random.shuffle(image_label_pairs)
-    split_idx = int(len(image_label_pairs) * train_frac)
-
-    _copy_split_files(
-        image_label_pairs[:split_idx],
-        dest_dir / "images" / "train",
-        dest_dir / "labels" / "train",
-        only_labels=bool(nas_path),
-    )
-    _copy_split_files(
-        image_label_pairs[split_idx:],
-        dest_dir / "images" / "val",
-        dest_dir / "labels" / "val",
-        only_labels=bool(nas_path),
-    )
+        pairs = _match_labels_to_images(img_paths, label_index)
+        _copy_split_files(
+            pairs,
+            dest_dir / "images" / split_name,
+            dest_dir / "labels" / split_name,
+            only_labels=bool(nas_path),
+        )
+        split_file.unlink()
 
     yaml_path = dest_dir / "data.yaml"
-    yaml_data = {
-        "train": "images/train",
-        "val": "images/val",
-        "names": {i: name for i, name in enumerate(class_names)},
-    }
-
-    # If using NAS, we point the base path to the NAS, but labels are local.
-    # However, Ultralytics expects images/ and labels/ to be siblings.
-    # So we keep paths relative to the temp 'split' directory.
-
     with open(yaml_path, "w") as f:
-        yaml.dump(yaml_data, f, sort_keys=False)
-
+        yaml.dump(
+            {
+                "train": "images/train",
+                "val": "images/val",
+                "names": {i: n for i, n in enumerate(find_class_names(source_dir))},
+            },
+            f,
+            sort_keys=False,
+        )
     return yaml_path
 
 
@@ -200,6 +188,17 @@ def find_class_names(extracted_path: Path) -> list[str]:
     raise FileNotFoundError(
         "Could not find class names file (*.yaml, *.names, or classes.txt)."
     )
+
+
+def _match_labels_to_images(
+    img_paths: List[Path], label_index: dict
+) -> List[Tuple[Path, Path]]:
+    pairs = []
+    for img_p in img_paths:
+        lbl_p = label_index.get(f"{img_p.stem}.txt")
+        if lbl_p:
+            pairs.append((img_p, lbl_p))
+    return pairs
 
 
 def _copy_split_files(
@@ -236,10 +235,11 @@ def _prepare_coco_images(
     nas_prefix: str = "",
 ) -> None:
     """Copies or symlinks images for a COCO split."""
+
     def _worker(img_info):
         file_name = img_info["file_name"]
         img_name = Path(file_name).name
-        
+
         # Priority 1: Direct path
         src_img = source_dir / file_name
         if src_img.exists():
@@ -254,18 +254,18 @@ def _prepare_coco_images(
         list(executor.map(_worker, images))
 
 
-def _index_directory(directory: Path, extensions: Optional[List[str]] = None) -> dict[str, Path]:
+def _index_directory(
+    directory: Path, extensions: Optional[List[str]] = None
+) -> dict[str, Path]:
     """Creates a mapping of filenames to their absolute paths."""
     index = {}
-    # If no extensions provided, we index everything
-    patterns = [f"*{ext}" for ext in extensions] if extensions else ["*"]
-    
-    for pattern in patterns:
-        for p in directory.rglob(pattern):
-            if p.is_file():
-                # Store by name. Note: duplicate filenames in different subdirs 
-                # will be overwritten by the last one found.
-                index[p.name] = p
+    ext_set = {e.lower() for e in extensions} if extensions else None
+    for p in directory.rglob("*"):
+        if not p.is_file():
+            continue
+        if ext_set and p.suffix.lower() not in ext_set:
+            continue
+        index[p.name] = p
     return index
 
 

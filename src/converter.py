@@ -38,60 +38,69 @@ def slice_coco_dataset(
             _fill_coco_images_from_nas(json_file, input_dir, nas_path, nas_prefix)
 
     # If there's exactly one JSON and we have multiple jobs, process it in parallel chunks
-    if len(json_files) == 1 and jobs > 1:
-        main_json = json_files[0]
-        with open(main_json, "r") as f:
-            full_data = json.load(f)
+    main_json = json_files[0]
+    if len(json_files) == 1:
+        if jobs > 1:
+            with open(main_json, "r") as f:
+                full_data = json.load(f)
 
-        # Split the images into `jobs` chunks
-        images = full_data.get("images", [])
-        if not images:
-            print(f"Warning: No images found in {main_json}")
+            images = full_data.get("images", [])
+            if not images:
+                return
+
+            chunks = _split_coco_json(full_data, jobs)
+            chunk_dir = Path(tempfile.mkdtemp(prefix="coco_chunks_"))
+            chunk_paths, sliced_json_paths = [], []
+
+            for i, chunk_data in enumerate(chunks):
+                chunk_file = chunk_dir / f"chunk_{i:03d}.json"
+                with open(chunk_file, "w") as f:
+                    json.dump(chunk_data, f)
+                chunk_paths.append(chunk_file)
+
+            src_image_dir = _resolve_image_dir(input_dir, main_json)
+
+            with concurrent.futures.ProcessPoolExecutor(max_workers=jobs) as executor:
+                futures = [
+                    executor.submit(
+                        _slice_coco_chunk,
+                        chunk_path,
+                        src_image_dir,
+                        output_dir,
+                        slice_size,
+                        overlap_ratio,
+                    )
+                    for chunk_path in chunk_paths
+                ]
+                for future in concurrent.futures.as_completed(futures):
+                    sliced_json_paths.append(future.result())
+
+            _merge_coco_jsons(
+                sliced_json_paths,
+                output_dir / "annotations" / main_json.name,
+            )
+
+            for p in sliced_json_paths:
+                p.unlink(missing_ok=True)
+            shutil.rmtree(chunk_dir, ignore_errors=True)
             return
 
-        # Determine the base name for SAHI output
-        # SAHI appends _coco.json to the output name
-
-        chunks = _split_coco_json(full_data, jobs)
-        chunk_dir = Path(tempfile.mkdtemp(prefix="coco_chunks_"))
-        chunk_paths = []
-        sliced_json_paths = []
-
-        for i, chunk_data in enumerate(chunks):
-            chunk_file = chunk_dir / f"chunk_{i:03d}.json"
-            with open(chunk_file, "w") as f:
-                json.dump(chunk_data, f)
-            chunk_paths.append(chunk_file)
-
-        src_image_dir = _resolve_image_dir(input_dir, main_json)
-
-        with concurrent.futures.ProcessPoolExecutor(max_workers=jobs) as executor:
-            futures = [
-                executor.submit(
-                    _slice_coco_chunk,
-                    chunk_path,
-                    src_image_dir,
-                    output_dir,
-                    slice_size,
-                    overlap_ratio,
-                )
-                for chunk_path in chunk_paths
-            ]
-            # Wait for all chunks to finish
-            for future in concurrent.futures.as_completed(futures):
-                sliced_json_paths.append(future.result())
-
-        _merge_coco_jsons(
-            sliced_json_paths,
-            output_dir / "annotations" / main_json.name,
+    # Single file or multiple files (non-parallel/serial)
+    all_sliced_jsons = []
+    for json_file in json_files:
+        src_image_dir = _resolve_image_dir(input_dir, json_file)
+        sliced_json = _slice_coco_chunk(
+            json_file, src_image_dir, output_dir, slice_size, overlap_ratio
         )
+        all_sliced_jsons.append(sliced_json)
 
-        # Cleanup
-        for p in sliced_json_paths:
-            p.unlink(missing_ok=True)
-        shutil.rmtree(chunk_dir, ignore_errors=True)
-
-        return
+    # If it was a single file, move the result to annotations/
+    if len(json_files) == 1:
+        target_json = output_dir / "annotations" / main_json.name
+        target_json.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(all_sliced_jsons[0], target_json)
+    else:
+        print("Sliced multiple COCO files. Results are in images/ as *_coco.json")
 
 
 def _split_coco_json(full_data: dict, num_chunks: int) -> List[dict]:
@@ -141,21 +150,22 @@ def _slice_coco_chunk(
     from sahi.slicing import slice_coco
 
     out_dir = Path(output_dir).resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
+    img_out_dir = out_dir / "images"
+    img_out_dir.mkdir(parents=True, exist_ok=True)
 
-    output_name = chunk_path.name
+    output_name = chunk_path.stem
     slice_coco(
         coco_annotation_file_path=str(chunk_path),
         image_dir=str(image_dir),
         output_coco_annotation_file_name=output_name,
-        output_dir=str(out_dir),
+        output_dir=str(img_out_dir),
         slice_height=slice_size[0],
         slice_width=slice_size[1],
         overlap_height_ratio=overlap_ratio[0],
         overlap_width_ratio=overlap_ratio[1],
         verbose=0,
     )
-    return out_dir / f"{output_name}_coco.json"
+    return img_out_dir / f"{output_name}_coco.json"
 
 
 def _merge_coco_jsons(chunk_paths: List[Path], output_path: Path) -> None:
