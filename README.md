@@ -1,5 +1,10 @@
 # Cvat Auto Annotation Helper (`caah`)
 
+## Requirements
+
+- `dirnev` ( for virtual env management)
+- `conda` (install anaconda env)
+
 ## Installation
 
 1.  Clone the repository:
@@ -24,22 +29,18 @@ CVAT_URL=http://localhost:8080
 CVAT_USERNAME=your_username
 CVAT_PASSWORD=your_password
 NAS_PATH=/path/to/mount/nas
+# NAS path that mount in CVAT
+NAS_PREFIX=RNT
 
 # Secondary CVAT Server (For Migration)
 CVAT_URL_2=http://old-cvat:8080
 CVAT_USERNAME_2=old_username
 CVAT_PASSWORD_2=old_password
 
-# NAS mapping configuration
-# The prefix CVAT uses internally that should be ignored locally
-NAS_PREFIX=RNT
-
 # Internal share paths used within CVAT containers (Migration Specifics)
 CVAT_SHARE_PATH=/home/django/share/RNT
 CVAT_SHARE_PATH_2=/home/django/share
 ```
-
-# Usage
 
 # Usage
 
@@ -49,15 +50,98 @@ The tool is accessed via the `caah` command. You can explore available modules u
 caah --help
 ```
 
+## Example
 
-1.  **Dataset Management**: Export/Import projects and tasks from CVAT.
-2.  **Training**: Train YOLOv11 models with NAS optimization and custom Albumentations.
-3.  **Dataset Processing**: Convert between YOLO/COCO formats and perform dataset slicing (tiling) for high-resolution imagery.
-4.  **Auto-Annotation**: Batch inference on CVAT tasks with IoA-based filtering of existing labels.
-5.  **Migration**: Move tasks and project structures between different CVAT instances.
-6.  **Upload**: Upload the result back to the same CVAT project.
+### 1. Export Dataset from CVAT
 
-## Documents
+```bash
+# YOLO 1.1 dataset with images
+caah cvat project export_dataset \
+  --project-id 26 \
+  --output-file dataset_yolo.zip \
+  --format "YOLO 1.1"
+
+# COCO 1.0 dataset with images
+caah cvat project export_dataset \
+  --project-id 26 \
+  --output-file dataset_yolo.zip \
+  --format "COCO 1.0"
+
+# COCO 1.0 dataset without images
+caah cvat project export_dataset \
+  --project-id 26 \
+  --no-images \
+  --output-file dataset_yolo.zip \
+  --format "COCO 1.0"
+```
+
+### 2. Dataset Conversion & Slicing (SAHI)
+
+```bash
+# Convert YOLO to COCO
+caah dataset yolo2coco dataset_yolo.zip dataset_coco.zip
+
+# Slice images into 640x640 tiles with 20% overlap
+caah dataset slice dataset_coco.zip sliced_coco.zip --size 640:640 --overlap 0.2:0.2
+
+# Convert sliced COCO back to YOLO for training
+caah dataset coco2yolo sliced_coco.zip sliced_yolo.zip
+```
+
+### 3. Training
+
+```bash
+# train with YOLO dataset
+caah train \
+  --data sliced_yolo.zip \
+  --model yolo11n \
+  --epochs 50 \
+  --imgsz 640 \
+  --batch 16 \
+  --device gpu \
+  --workers 8 \
+  --save-period 10 \
+  --split 8:2 \
+  --format yolo \
+  --augmentation my_aug.py  # Path to .py file defining custom_transforms.
+
+# train with COCO dataset
+caah train \
+  --data sliced_yolo.zip \
+  --model yolo11n \
+  --epochs 50 \
+  --imgsz 640 \
+  --batch 16 \
+  --device gpu \
+  --workers 8 \
+  --save-period 10 \
+  --split 8:2 \
+  --format coco \
+  --augmentation my_aug.py  # Path to .py file defining custom_transforms.
+```
+
+### 4. Auto-Annotation
+
+```bash
+caah annotate \
+  --model ./weights/best.pt \
+  --task-id 123 \
+  --device gpu \
+  --conf 0.25 \
+  --ioa 0.5 \
+  --batch 16
+
+# with SAHI for Sliced Inference
+caah annotate \
+  --model ./weights/best.pt \
+  --task-id 123 \
+  --sahi \
+  --slice-h 640 \
+  --slice-w 640 \
+  --overlap-h 0.2 \
+  --overlap-w 0.2
+```
+
 ## Documents
 
 - [Documents](./doc/README.md)
