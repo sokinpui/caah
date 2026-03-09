@@ -85,13 +85,13 @@ caah dataset coco2yolo sliced_coco.zip sliced_yolo.zip
 
 ## 4. Training
 
+### 3.4 Format Conversion (COCO to YOLO)
+
 Train the model using the sliced dataset. Since the patches are extracted locally, do not use the `--network-drive` flag for this specific dataset.
+Train the model using the sliced dataset. Since the patches are extracted locally, do not use the `--nas` flag for this specific dataset.
 
 ```bash
 caah train \
-  -m yolo11s \
-  --data sliced_yolo.zip \
-  --split 8:2 \
   --epochs 1000 \
   --batch 32 \
   --imgsz 640 \

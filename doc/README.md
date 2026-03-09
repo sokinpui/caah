@@ -66,7 +66,7 @@ Trains a YOLO model using a zipped dataset (typically exported from CVAT).
 
 ```bash
 # Train with custom augmentations and NAS optimization
-caah train --data labels_only.zip --network-drive --split 8:2 --augmentation ./my_aug.py --project "Bird-Detection" --name "YOLO11s-v1"
+caah train --data labels_only.zip --nas --split 8:2 --augmentation ./my_aug.py --project "Bird-Detection" --name "YOLO11s-v1"
 ```
 
 ---
@@ -75,7 +75,7 @@ caah train --data labels_only.zip --network-drive --split 8:2 --augmentation ./m
 If your images are stored on a NAS and mapped in CVAT as "Share" storage, use this workflow to avoid downloading massive datasets:
 
 1.  **Export Labels**: `caah cvat project export_dataset --project-id 1 --no-images --output-file labels.zip`
-2.  **Train**: `caah train --data labels.zip --network-drive --split 8:2`
+2.  **Train**: `caah train --data labels.zip --nas --split 8:2`
 
 *Note: This creates symlinks to the NAS images instead of copying them to the local machine.*
 
@@ -148,7 +148,7 @@ caah migrate project-layout
   - `--name`: Name of the specific training run.
   - `--save-period`: Save a checkpoint every X epochs.
   - `--workers`: Number of data loader workers. Default: `8`.
-  - `--network-drive`: Enable NAS optimization (requires `NAS_PATH` in `.env`).
+  - `--nas`: Enable NAS optimization (requires `NAS_PATH` in `.env`).
   - `-a`, `--augmentation`: Path to a Python file defining `custom_transforms` (Albumentations).
 
   - **Action**: `backup`

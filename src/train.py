@@ -181,7 +181,12 @@ def train(
             "--augmentation", "-a", help="Path to .py file defining custom_transforms."
         ),
     ] = None,
-    network_drive: bool = False,
+    nas: Annotated[
+        bool,
+        typer.Option(
+            "--nas", help="Enable NAS optimization (requires NAS_PATH in .env)."
+        ),
+    ] = False,
     format: Annotated[
         str,
         typer.Option("--format", help="Dataset format: 'yolo' or 'coco'."),
@@ -194,10 +199,10 @@ def train(
     if not model_spec.endswith(".pt"):
         model_spec += ".pt"
 
-    nas_path = os.getenv("NAS_PATH") if network_drive else None
+    nas_path = os.getenv("NAS_PATH") if nas else None
     nas_prefix = os.getenv("NAS_PREFIX", "")
 
-    if network_drive and not nas_path:
+    if nas and not nas_path:
         raise ValueError("--network-drive requires NAS_PATH in .env")
 
     custom_aug = None
