@@ -6,8 +6,8 @@ import tempfile
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from sahi.slicing import slice_coco
 from datumaro.components.dataset import Dataset
+from sahi.slicing import slice_coco
 
 from utils import strip_prefix
 
@@ -76,7 +76,10 @@ def slice_coco_dataset(
             for future in concurrent.futures.as_completed(futures):
                 future.result()  # Propagate exceptions
 
-        _merge_coco_jsons([output_dir / p.name for p in chunk_paths], output_dir / "annotations" / main_json.name)
+        _merge_coco_jsons(
+            [output_dir / p.name for p in chunk_paths],
+            output_dir / "annotations" / main_json.name,
+        )
         return
 
     def _process_single_coco(coco_path: Path):
@@ -130,16 +133,18 @@ def _split_coco_json(full_data: dict, num_chunks: int) -> List[dict]:
     chunk_size = math.ceil(len(images) / num_chunks)
     chunks = []
     for i in range(0, len(images), chunk_size):
-        chunk_images = images[i:i + chunk_size]
+        chunk_images = images[i : i + chunk_size]
         img_ids = {img["id"] for img in chunk_images}
         chunk_anns = []
         for img_id in img_ids:
             chunk_anns.extend(ann_by_img.get(img_id, []))
-        chunks.append({
-            "images": chunk_images,
-            "annotations": chunk_anns,
-            "categories": categories,
-        })
+        chunks.append(
+            {
+                "images": chunk_images,
+                "annotations": chunk_anns,
+                "categories": categories,
+            }
+        )
     return chunks
 
 
@@ -198,9 +203,14 @@ def _merge_coco_jsons(chunk_paths: List[Path], output_path: Path) -> None:
                     all_annotations.append(ann)
             next_image_id += 1
 
-    merged = {"images": all_images, "annotations": all_annotations, "categories": categories}
+    merged = {
+        "images": all_images,
+        "annotations": all_annotations,
+        "categories": categories,
+    }
     with open(output_path, "w") as f:
         json.dump(merged, f)
+
 
 def _resolve_image_dir(extract_path: Path, coco_path: Path) -> Path:
     """
