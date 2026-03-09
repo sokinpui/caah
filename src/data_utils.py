@@ -1,3 +1,4 @@
+import concurrent.futures
 import json
 import os
 import random
@@ -64,12 +65,16 @@ def split_coco_dataset(
     with open(dest_dir / "annotations" / "instances_val.json", "w") as f:
         json.dump(val_data, f)
 
+    # Build index for fast lookup
+    file_index = _index_directory(source_dir if not nas_path else Path(nas_path))
+
     _prepare_coco_images(
-        train_images, source_dir, dest_dir / "images" / "train", nas_path, nas_prefix
+        train_images, source_dir, dest_dir / "images" / "train", file_index, nas_path, nas_prefix
     )
     _prepare_coco_images(
-        val_images, source_dir, dest_dir / "images" / "val", nas_path, nas_prefix
+        val_images, source_dir, dest_dir / "images" / "val", file_index, nas_path, nas_prefix
     )
+
 
     yaml_path = dest_dir / "data.yaml"
     yaml_data = {
@@ -116,6 +121,11 @@ def split_dataset(
         else source_dir
     )
     search_dir = Path(nas_path) if nas_path else labels_root
+    
+    # Index images once to avoid repeated disk scanning
+    image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
+    print(f"Indexing images in {search_dir}...")
+    image_index = _index_directory(search_dir, image_extensions)
 
     label_paths = list(labels_root.rglob("*.txt"))
 
@@ -127,11 +137,10 @@ def split_dataset(
         # Strip prefix to find in NAS
         clean_rel_p = strip_prefix(rel_lp_str, nas_prefix)
 
-        for ext in image_extensions:
-            img_p = search_dir / Path(clean_rel_p).with_suffix(ext)
-            if img_p.exists():
-                image_label_pairs.append((img_p, lp))
-                break
+        # Match label with indexed image
+        img_name = Path(clean_rel_p).name
+        if img_name in image_index:
+             image_label_pairs.append((image_index[img_name], lp))
 
     if not image_label_pairs:
         print(f"Error: No matching images found in {search_dir}.", file=sys.stderr)
@@ -201,41 +210,70 @@ def _copy_split_files(
 ) -> None:
     img_dest.mkdir(parents=True, exist_ok=True)
     lbl_dest.mkdir(parents=True, exist_ok=True)
-    for i, (img_path, lbl_path) in enumerate(pairs):
+
+    def _worker(idx_pair):
+        i, (img_path, lbl_path) = idx_pair
         unique_stem = f"{i}_{img_path.stem}"
         target_img = img_dest / f"{unique_stem}{img_path.suffix}"
         target_lbl = lbl_dest / f"{unique_stem}{lbl_path.suffix}"
 
-        # If using NAS, we don't copy images, we symlink them so YOLO can find them
         if only_labels:
             target_img.symlink_to(img_path)
         else:
             shutil.copy(img_path, target_img)
         shutil.copy(lbl_path, target_lbl)
 
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        list(executor.map(_worker, enumerate(pairs)))
+
 
 def _prepare_coco_images(
     images: List[dict],
     source_dir: Path,
     dest_img_dir: Path,
+    file_index: dict[str, Path],
     nas_path: Optional[str] = None,
     nas_prefix: str = "",
 ) -> None:
     """Copies or symlinks images for a COCO split."""
-    search_dir = Path(nas_path) if nas_path else source_dir
-
-    for img_info in images:
+    def _worker(img_info):
         file_name = img_info["file_name"]
+        img_name = Path(file_name).name
+        
+        # Priority 1: Direct path
+        src_img = source_dir / file_name
+        if src_img.exists():
+            _link_or_copy(src_img, dest_img_dir / img_name, bool(nas_path))
+            return
 
-        # Try to find the image in source_dir first, then NAS
-        src_img = find_file(source_dir, [file_name, f"**/{file_name}"])
+        # Priority 2: Indexed lookup
+        if img_name in file_index:
+            _link_or_copy(file_index[img_name], dest_img_dir / img_name, bool(nas_path))
 
-        if not src_img and nas_path:
-            clean_rel_p = strip_prefix(file_name, nas_prefix)
-            src_img = Path(nas_path) / clean_rel_p
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        list(executor.map(_worker, images))
 
-        if not src_img or not src_img.exists():
-            continue
 
-        target = dest_img_dir / Path(file_name).name
-        target.symlink_to(src_img) if nas_path else shutil.copy(src_img, target)
+def _index_directory(directory: Path, extensions: Optional[List[str]] = None) -> dict[str, Path]:
+    """Creates a mapping of filenames to their absolute paths."""
+    index = {}
+    # If no extensions provided, we index everything
+    patterns = [f"*{ext}" for ext in extensions] if extensions else ["*"]
+    
+    for pattern in patterns:
+        for p in directory.rglob(pattern):
+            if p.is_file():
+                # Store by name. Note: duplicate filenames in different subdirs 
+                # will be overwritten by the last one found.
+                index[p.name] = p
+    return index
+
+
+def _link_or_copy(src: Path, dst: Path, use_symlink: bool):
+    """Helper to symlink or copy a file."""
+    if dst.exists():
+        return
+    if use_symlink:
+        dst.symlink_to(src)
+    else:
+        shutil.copy(src, dst)
