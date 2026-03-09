@@ -49,6 +49,9 @@ def slice_coco_dataset(
             print(f"Warning: No images found in {main_json}")
             return
 
+        # Determine the base name for SAHI output
+        # SAHI appends _coco.json to the output name
+
         chunks = _split_coco_json(full_data, jobs)
         chunk_dir = Path(tempfile.mkdtemp(prefix="coco_chunks_"))
         chunk_paths = []
@@ -82,39 +85,13 @@ def slice_coco_dataset(
             sliced_json_paths,
             output_dir / "annotations" / main_json.name,
         )
+
+        # Cleanup
+        for p in sliced_json_paths:
+            p.unlink(missing_ok=True)
+        shutil.rmtree(chunk_dir, ignore_errors=True)
+
         return
-
-    def _process_single_coco(coco_path: Path):
-        from sahi.slicing import slice_coco
-
-        src_image_dir = _resolve_image_dir(input_dir, coco_path)
-        with tempfile.TemporaryDirectory() as slice_tmp:
-            slice_tmp_path = Path(slice_tmp)
-            slice_coco(
-                coco_annotation_file_path=str(coco_path),
-                image_dir=str(src_image_dir),
-                output_coco_annotation_file_name=coco_path.name,
-                output_dir=str(slice_tmp_path),
-                slice_height=slice_size[0],
-                slice_width=slice_size[1],
-                overlap_height_ratio=overlap_ratio[0],
-                overlap_width_ratio=overlap_ratio[1],
-                verbose=0,
-            )
-
-            for gj in slice_tmp_path.glob("*.json"):
-                target_ann = output_dir / "annotations"
-                target_ann.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(gj), str(target_ann / gj.name))
-
-            for item in slice_tmp_path.iterdir():
-                if item.is_dir():
-                    shutil.copytree(item, img_dir / item.name, dirs_exist_ok=True)
-                elif item.is_file() and item.suffix.lower() != ".json":
-                    shutil.move(str(item), str(img_dir / item.name))
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
-        list(executor.map(_process_single_coco, json_files))
 
 
 def _split_coco_json(full_data: dict, num_chunks: int) -> List[dict]:
@@ -162,20 +139,23 @@ def _slice_coco_chunk(
     The sliced JSON is placed directly in `output_dir` with the same name as `chunk_path`.
     """
     from sahi.slicing import slice_coco
-    output_dir = Path(output_dir).resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
+
+    out_dir = Path(output_dir).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    output_name = chunk_path.name
     slice_coco(
         coco_annotation_file_path=str(chunk_path),
         image_dir=str(image_dir),
-        output_coco_annotation_file_name=chunk_path.name,
-        output_dir=str(output_dir),
+        output_coco_annotation_file_name=output_name,
+        output_dir=str(out_dir),
         slice_height=slice_size[0],
         slice_width=slice_size[1],
         overlap_height_ratio=overlap_ratio[0],
         overlap_width_ratio=overlap_ratio[1],
         verbose=0,
     )
-    return output_dir / chunk_path.name
+    return out_dir / f"{output_name}_coco.json"
 
 
 def _merge_coco_jsons(chunk_paths: List[Path], output_path: Path) -> None:
