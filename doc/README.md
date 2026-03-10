@@ -26,20 +26,10 @@ A wrapper for interacting with the CVAT REST API.
 ```bash
 # List all projects
 caah cvat project list
-# Import a project from a backup
-caah cvat project import my_project_backup.zip
-
-# Import a dataset into a project
-caah cvat project import_dataset -u 1 --input-file /path/to/dataset.zip --format yolo
 ```
 
 #### Project Management
 ```bash
-# Create a new project
-caah cvat project create "New Project Name"
-
-# Backup a project to a zip file
-caah cvat project backup --project-id 1 --output-file backup.zip
 ```
 
 ### `dataset` command
@@ -74,7 +64,7 @@ caah train --data labels_only_dir --nas --split 8:2 --augmentation ./my_aug.py -
 
 If your images are stored on a NAS and mapped in CVAT as "Share" storage, use this workflow to avoid downloading massive datasets:
 
-1.  **Export Labels**: `caah cvat project export_dataset --project-id 1 --no-images --output-file labels.zip`
+1.  **Export Labels**: `caah cvat project export --id 1 --no-images --output-file labels.zip`
 2.  **Unzip**: `unzip labels.zip -d labels_dir`
 3.  **Train**: `caah train --data labels_dir --nas --split 8:2`
 
@@ -106,10 +96,10 @@ caah migrate project-layout
 - `--stdout`: Suppress all messages except the final output path to stdout.
 
 - **Resource**: `task`
-  - **Action**: `export_dataset`
+  - **Action**: `export`
     - **Description**: Export all annotations and images from a task.
     - **Options**:
-      - `-tid`, `--task-id` (required): ID of the task.
+      - `-i`, `--id` (required): ID of the task.
       - `-o`, `--output-file` (required): Path to save dataset.
       - `-f`, `--format`: Dataset format. Default: `YOLO 1.1`.
       - `--no-images`: Do not include images in the export.
@@ -118,16 +108,10 @@ caah migrate project-layout
 - **Resource**: `project`
   - **Action**: `list`
     - **Description**: List all projects in the CVAT instance.
-  - **Action**: `create`
-    - **Options**:
-      - `-n`, `--name` (required): Project name.
-  - **Action**: `delete`
-    - **Options**:
-      - `-u`, `--project-id` (required): ID of the project to delete.
-  - **Action**: `export_dataset`
+  - **Action**: `export`
     - **Description**: Export all annotations and images from a project.
     - **Options**:
-      - `-u`, `--project-id` (required): ID of the project.
+      - `-i`, `--id` (required): ID of the project.
       - `-o`, `--output-file` (required): Path to save dataset.
       - `-f`, `--format`: Dataset format. Default: `YOLO 1.1`.
       - `--no-images`: Do not include images in the export.
@@ -151,16 +135,6 @@ caah migrate project-layout
   - `--workers`: Number of data loader workers. Default: `8`.
   - `--nas`: Enable NAS optimization (requires `NAS_PATH` in `.env`).
   - `-a`, `--augmentation`: Path to a Python file defining `custom_transforms` (Albumentations).
-
-  - **Action**: `backup`
-    - **Description**: Export a project backup file.
-    - **Options**:
-      - `-u`, `--project-id`: ID of the project.
-      - `-o`, `--output-file`: Path to save the backup zip.
-  - **Action**: `import`
-    - **Description**: Import a project from a backup file.
-    - **Options**:
-      - `-i`, `--input-file`: Path to the backup zip.
 
 ### `migrate` command
 

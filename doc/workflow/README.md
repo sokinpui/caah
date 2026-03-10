@@ -53,8 +53,8 @@ To achieve the best results with high-resolution images, follow these steps to s
 Export the project or task from CVAT in **YOLO 1.1** format. Ensure images are included.
 
 ```bash
-caah cvat project export_dataset \
-  --project-id 1 \
+caah cvat project export \
+  --id 1 \
   --no-images \
   --output-file yolo_dataset.zip
 ```

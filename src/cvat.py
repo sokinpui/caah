@@ -166,15 +166,6 @@ class CVATApi:
         self._handle_error(response, f"Failed to patch annotations for task {task_id}")
         return response.json()
 
-    def create_project(self, name: str) -> dict:
-        """Create a new project."""
-        url = f"{self.api_url}/projects"
-        response = self.session.post(url, json={"name": name})
-        self._handle_error(response, f"Failed to create project '{name}'")
-        project_data = response.json()
-        print(f"Successfully created project '{name}' with ID: {project_data['id']}")
-        return project_data
-
     def list_projects(self) -> dict:
         """List all projects."""
         url = f"{self.api_url}/projects?page_size=100"
@@ -182,57 +173,7 @@ class CVATApi:
         self._handle_error(response, "Failed to list projects")
         return response.json()
 
-    def delete_project(self, project_id: int) -> None:
-        """Delete a project."""
-        url = f"{self.api_url}/projects/{project_id}"
-        response = self.session.delete(url)
-        if response.status_code != 204:
-            self._handle_error(response, f"Failed to delete project {project_id}")
-        print(f"Project {project_id} deleted successfully.")
-
-    def backup_project(self, project_id: int, output_file: str) -> None:
-        """Backup a project."""
-        url = f"{self.api_url}/projects/{project_id}/backup/export"
-        response = self.session.post(url)
-        self._handle_error(
-            response, f"Failed to trigger backup for project {project_id}"
-        )
-
-        if response.status_code != 202:
-            raise Exception(
-                f"Unexpected status code for backup trigger: {response.status_code}\n{response.text}"
-            )
-
-        rq_id = response.json().get("rq_id")
-        if not rq_id:
-            raise Exception("Could not get request ID for backup job.")
-
-        job_result = self.wait_for_job(rq_id)
-        download_url = job_result.get("result_url")
-        if not download_url:
-            raise Exception("Job finished but no result_url found.")
-
-        if not download_url.startswith(("http://", "https://")):
-            download_url = f"{self.base_url}{download_url}"
-
-        self._download_file(download_url, output_file)
-
-    def import_project(self, backup_file: str) -> None:
-        """Import a project from a backup."""
-        url = f"{self.api_url}/projects/backup"
-        with open(backup_file, "rb") as f:
-            files = {"project_file": (Path(backup_file).name, f, "application/zip")}
-            response = self.session.post(url, files=files)
-        self._handle_error(response, f"Failed to import project from {backup_file}")
-
-        if response.status_code == 202:
-            rq_id = response.json().get("rq_id")
-            self.wait_for_job(rq_id)
-            print("Project import job finished.")
-        else:
-            print("Project import started.")
-
-    def export_project_dataset(
+    def export_project(
         self,
         project_id: int,
         output_file: str,
@@ -272,27 +213,7 @@ class CVATApi:
 
         self._download_file(download_url, output_file)
 
-    def import_project_dataset(
-        self, project_id: int, dataset_file: str, format_name: str
-    ) -> None:
-        """Import a dataset into a project."""
-        url = f"{self.api_url}/projects/{project_id}/dataset"
-        params = {"format": format_name}
-        with open(dataset_file, "rb") as f:
-            files = {"dataset_file": (Path(dataset_file).name, f)}
-            response = self.session.post(url, params=params, files=files)
-        self._handle_error(
-            response, f"Failed to import dataset for project {project_id}"
-        )
-
-        if response.status_code == 202:
-            rq_id = response.json().get("rq_id")
-            self.wait_for_job(rq_id)
-            print("Dataset import job finished.")
-        else:
-            print("Dataset import started.")
-
-    def export_task_dataset(
+    def export_task(
         self,
         task_id: int,
         output_file: str,
@@ -342,73 +263,33 @@ def _get_api() -> CVATApi:
     )
 
 
-@project_app.command("create")
-def project_create(name: str) -> None:
-    _get_api().create_project(name)
-
-
 @project_app.command("list")
 def project_list() -> None:
     api = _get_api()
     print(TableFormatter.format_projects_table(api.list_projects()))
 
 
-@project_app.command("delete")
-def project_delete(project_id: int) -> None:
-    _get_api().delete_project(project_id)
-
-
-@project_app.command("backup")
-def project_backup(project_id: int, output_file: Path) -> None:
-    _get_api().backup_project(project_id, str(output_file))
-    print(output_file)
-
-
-@project_app.command("import")
-def project_import(input_file: Path) -> None:
-    _get_api().import_project(str(input_file))
-
-
-@project_app.command("import_dataset")
-def project_import_dataset(
-    project_id: Annotated[int, typer.Option("--project-id", "-u")],
-    input_file: Annotated[Path, typer.Option("--input-file", "-i")],
-    format_name: Annotated[str, typer.Option("--format", "-f", help="yolo or cvat")],
-) -> None:
-    if not input_file.is_file() or input_file.suffix.lower() != ".zip":
-        raise ValueError(f"Input file must be a .zip file. Got: {input_file}")
-
-    format_map = {"yolo": "YOLO 1.1", "cvat": "CVAT 1.1"}
-    cvat_format = format_map.get(format_name.lower())
-    if not cvat_format:
-        raise ValueError(f"Unsupported format {format_name}")
-
-    _get_api().import_project_dataset(project_id, str(input_file), cvat_format)
-
-
-@project_app.command("export_dataset")
-def project_export_dataset(
-    project_id: Annotated[int, typer.Option("--project-id", "-u")],
+@project_app.command("export")
+def project_export(
+    project_id: Annotated[int, typer.Option("--id", "-i")],
     output_file: Annotated[Path, typer.Option("--output-file", "-o")],
     format_name: Annotated[str, typer.Option("--format", "-f")] = "YOLO 1.1",
     images: Annotated[bool, typer.Option("--images/--no-images")] = True,
     only_manual: bool = False,
 ) -> None:
-    _get_api().export_project_dataset(
+    _get_api().export_project(
         project_id, str(output_file), format_name, images, only_manual
     )
     print(output_file)
 
 
-@task_app.command("export_dataset")
-def task_export_dataset(
-    task_id: Annotated[int, typer.Option("--task-id", "-tid")],
+@task_app.command("export")
+def task_export(
+    task_id: Annotated[int, typer.Option("--id", "-i")],
     output_file: Annotated[Path, typer.Option("--output-file", "-o")],
     format_name: Annotated[str, typer.Option("--format", "-f")] = "YOLO 1.1",
     images: Annotated[bool, typer.Option("--images/--no-images")] = True,
     only_manual: bool = False,
 ) -> None:
-    _get_api().export_task_dataset(
-        task_id, str(output_file), format_name, images, only_manual
-    )
+    _get_api().export_task(task_id, str(output_file), format_name, images, only_manual)
     print(output_file)

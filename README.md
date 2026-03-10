@@ -56,20 +56,20 @@ caah --help
 
 ```bash
 # YOLO 1.1 dataset with images
-caah cvat project export_dataset \
-  --project-id 26 \
+caah cvat project export \
+  --id 26 \
   --output-file dataset_yolo.zip \
   --format "YOLO 1.1"
 
 # COCO 1.0 dataset with images
-caah cvat project export_dataset \
-  --project-id 26 \
+caah cvat project export \
+  --id 26 \
   --output-file dataset_yolo.zip \
   --format "COCO 1.0"
 
 # COCO 1.0 dataset without images
-caah cvat project export_dataset \
-  --project-id 26 \
+caah cvat project export \
+  --id 26 \
   --no-images \
   --output-file dataset_yolo.zip \
   --format "COCO 1.0"
