@@ -18,7 +18,10 @@ def annotate(
     model_path: Annotated[
         Path, typer.Option("--model", "-m", help="Path to YOLO model file (.pt).")
     ],
-    task_id: Annotated[int, typer.Option("--id", "-i", help="CVAT Task ID.")],
+    task_id: Annotated[
+        Optional[int], typer.Option("--id", "-i", help="CVAT Task ID.")
+    ] = None,
+    task_ids: Annotated[Optional[str], typer.Option("--ids", help="Task IDs.")] = None,
     device: Annotated[
         str, typer.Option("--device", "-d", help="Device (cpu, gpu).")
     ] = "gpu",
@@ -44,6 +47,16 @@ def annotate(
 ) -> None:
     """Main execution flow for auto-annotation."""
     load_dotenv()
+
+    target_ids = []
+    if task_id:
+        target_ids.append(task_id)
+    if task_ids:
+        target_ids.extend([int(tid) for tid in task_ids.split()])
+
+    if not target_ids:
+        raise ValueError("No Task ID provided. Use --id or --ids.")
+
     model = _load_yolo_model(str(model_path), device)
 
     sh, sw = map(int, size.split(":"))
@@ -64,105 +77,137 @@ def annotate(
     print(f"Connecting to CVAT at {url}...")
 
     with make_client(url, credentials=(user, password)) as client:
-        print(f"Fetching task {task_id}...")
-        task = client.tasks.retrieve(task_id)
-
-        # Fetch metadata to get original filenames for NAS optimization
-        meta = task.get_meta()
-        frame_filenames = {i: frame.name for i, frame in enumerate(meta.frames)}
-
-        all_annotations = task.get_annotations()
-
-        labels = task.get_labels()
-        label_map = {l.name: l.id for l in labels}
-        source_attr_map = {
-            label.id: attr.id
-            for label in labels
-            for attr in label.attributes
-            if attr.name == "source"
-        }
-
-        existing_by_frame = {}
-        for s in all_annotations.shapes:
-            if s.type.value == "rectangle":
-                existing_by_frame.setdefault(s.frame, []).append(s)
-
-        print(f"Task has {task.size} frames. Starting inference...")
-        if nas_path:
-            print(f"NAS optimization enabled. Checking: {nas_path}")
-
-        new_shapes: List[models.LabeledShapeRequest] = []
-        dropped_ids: Set[int] = set()
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
-            for batch_start in range(0, task.size, batch_size):
-                batch_end = min(batch_start + batch_size, task.size)
-                frame_ids = list(range(batch_start, batch_end))
-
-                # Parallel Fetch
-                images = list(
-                    executor.map(
-                        lambda fid: _get_frame_image(
-                            fid, task, frame_filenames.get(fid), nas_path, nas_prefix
-                        ),
-                        frame_ids,
-                    )
-                )
-
-                # Batch Inference
-                batch_results = model.predict(
-                    images,
-                    sahi=sahi,
-                    slice_h=sh,
-                    slice_w=sw,
-                    overlap_h=oh,
-                    overlap_w=ow,
-                )
-
-                # Post-process
-                for fid, frame_preds in zip(frame_ids, batch_results):
-                    f_shapes, f_dropped = _process_predictions(
-                        frame_id=fid,
-                        predictions=frame_preds,
-                        label_map=label_map,
-                        source_attr_map=source_attr_map,
-                        frame_existing=existing_by_frame.get(fid, []),
-                        ioa_threshold=ioa,
-                    )
-                    new_shapes.extend(f_shapes)
-                    dropped_ids.update(f_dropped)
-
-                print(f"Processed frame {batch_end}/{task.size}...", end="\r")
-
-        def _clean_for_request(annotation_list, dropped_set, request_type):
-            cleaned = []
-            for item in annotation_list:
-                if item.id in dropped_set:
-                    continue
-                item_dict = item.to_dict()
-                item_dict.pop("id", None)
-                cleaned.append(request_type(**item_dict))
-            return cleaned
-
-        kept_shapes = _clean_for_request(
-            all_annotations.shapes, dropped_ids, models.LabeledShapeRequest
-        )
-        kept_tracks = _clean_for_request(
-            all_annotations.tracks, dropped_ids, models.LabeledTrackRequest
-        )
-        kept_tags = _clean_for_request(
-            all_annotations.tags, dropped_ids, models.LabeledImageRequest
-        )
-
-        task.set_annotations(
-            models.LabeledDataRequest(
-                shapes=kept_shapes + new_shapes,
-                tracks=kept_tracks,
-                tags=kept_tags,
+        for tid in target_ids:
+            _annotate_task(
+                client=client,
+                task_id=tid,
+                model=model,
+                batch_size=batch_size,
+                jobs=jobs,
+                ioa=ioa,
+                sahi=sahi,
+                size=(sh, sw),
+                overlap=(oh, ow),
+                nas_path=nas_path,
+                nas_prefix=nas_prefix,
             )
-        )
 
-    print(f"\nDone. Annotated task {task_id}.")
+    print(f"\nDone. Processed {len(target_ids)} tasks.")
+
+
+def _annotate_task(
+    client: Any,
+    task_id: int,
+    model: YoloModel,
+    batch_size: int,
+    jobs: int,
+    ioa: float,
+    sahi: bool,
+    size: Tuple[int, int],
+    overlap: Tuple[float, float],
+    nas_path: Optional[Path],
+    nas_prefix: str,
+) -> None:
+    """Internal logic to process a single task."""
+    print(f"Fetching task {task_id}...")
+    task = client.tasks.retrieve(task_id)
+
+    # Fetch metadata to get original filenames for NAS optimization
+    meta = task.get_meta()
+    frame_filenames = {i: frame.name for i, frame in enumerate(meta.frames)}
+
+    all_annotations = task.get_annotations()
+
+    labels = task.get_labels()
+    label_map = {l.name: l.id for l in labels}
+    source_attr_map = {
+        label.id: attr.id
+        for label in labels
+        for attr in label.attributes
+        if attr.name == "source"
+    }
+
+    existing_by_frame = {}
+    for s in all_annotations.shapes:
+        if s.type.value == "rectangle":
+            existing_by_frame.setdefault(s.frame, []).append(s)
+
+    print(f"Task {task_id} has {task.size} frames. Starting inference...")
+    if nas_path:
+        print(f"NAS optimization enabled for task {task_id}.")
+
+    new_shapes: List[models.LabeledShapeRequest] = []
+    dropped_ids: Set[int] = set()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+        for batch_start in range(0, task.size, batch_size):
+            batch_end = min(batch_start + batch_size, task.size)
+            frame_ids = list(range(batch_start, batch_end))
+
+            # Parallel Fetch
+            images = list(
+                executor.map(
+                    lambda fid: _get_frame_image(
+                        fid, task, frame_filenames.get(fid), nas_path, nas_prefix
+                    ),
+                    frame_ids,
+                )
+            )
+
+            # Batch Inference
+            batch_results = model.predict(
+                images,
+                sahi=sahi,
+                slice_h=size[0],
+                slice_w=size[1],
+                overlap_h=overlap[0],
+                overlap_w=overlap[1],
+            )
+
+            # Post-process
+            for fid, frame_preds in zip(frame_ids, batch_results):
+                f_shapes, f_dropped = _process_predictions(
+                    frame_id=fid,
+                    predictions=frame_preds,
+                    label_map=label_map,
+                    source_attr_map=source_attr_map,
+                    frame_existing=existing_by_frame.get(fid, []),
+                    ioa_threshold=ioa,
+                )
+                new_shapes.extend(f_shapes)
+                dropped_ids.update(f_dropped)
+
+            print(f"Processed frame {batch_end}/{task.size}...", end="\r")
+
+    def _clean_for_request(annotation_list, dropped_set, request_type):
+        cleaned = []
+        for item in annotation_list:
+            if item.id in dropped_set:
+                continue
+            item_dict = item.to_dict()
+            item_dict.pop("id", None)
+            cleaned.append(request_type(**item_dict))
+        return cleaned
+
+    kept_shapes = _clean_for_request(
+        all_annotations.shapes, dropped_ids, models.LabeledShapeRequest
+    )
+    kept_tracks = _clean_for_request(
+        all_annotations.tracks, dropped_ids, models.LabeledTrackRequest
+    )
+    kept_tags = _clean_for_request(
+        all_annotations.tags, dropped_ids, models.LabeledImageRequest
+    )
+
+    task.set_annotations(
+        models.LabeledDataRequest(
+            shapes=kept_shapes + new_shapes,
+            tracks=kept_tracks,
+            tags=kept_tags,
+        )
+    )
+
+    print(f"\nAnnotated task {task_id}.")
 
 
 def _process_predictions(
