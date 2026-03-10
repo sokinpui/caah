@@ -7,9 +7,6 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-import yaml
-from ultralytics.data.split import autosplit
-
 from utils import find_file, strip_prefix
 
 
@@ -34,6 +31,8 @@ def split_coco_dataset(
     nas_prefix: str = "",
 ) -> Path:
     """Splits a COCO dataset into train/val sets by partitioning the JSON."""
+    import yaml
+
     ratios = _parse_split_ratio(split_str)
     train_frac = ratios[0] / sum(ratios)
 
@@ -125,6 +124,9 @@ def split_dataset(
     nas_prefix: str = "",
 ) -> Path:
     """Splits YOLO dataset files into train/val sets."""
+    import yaml
+    from ultralytics.data.split import autosplit
+
     ratios = _parse_split_ratio(split_str)
     total = sum(ratios)
     weights = (ratios[0] / total, ratios[1] / total, 0.0)
@@ -172,6 +174,8 @@ def split_dataset(
 
 def find_class_names(extracted_path: Path) -> list[str]:
     """Finds class names from data.yaml or obj.names."""
+    import yaml
+
     yaml_file = find_file(extracted_path, ["*.yaml"])
     if yaml_file:
         with open(yaml_file, "r") as f:

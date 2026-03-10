@@ -6,10 +6,6 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
-from cvat_sdk import make_client
-from cvat_sdk.api_client import models
-from cvat_sdk.core.proxies.tasks import ResourceType
-from dotenv import load_dotenv
 
 from utils import CONTEXT_SETTINGS
 
@@ -23,6 +19,8 @@ migrate_app = typer.Typer(
 
 def _get_migration_config():
     """Helper to load credentials for both source and target servers."""
+    from dotenv import load_dotenv
+
     load_dotenv()
     target = (
         os.getenv("CVAT_USERNAME"),
@@ -45,8 +43,10 @@ def _get_migration_config():
     return source, target, source_share, target_share
 
 
-def _clone_labels(labels) -> list[models.PatchedLabelRequest]:
+def _clone_labels(labels) -> list:
     """Converts existing labels to request models, stripping IDs."""
+    from cvat_sdk.api_client import models
+
     new_labels = []
     for label in labels:
         label_dict = label.to_dict()
@@ -70,6 +70,8 @@ def _migrate_task_worker(
     Worker function to migrate a single task.
     Opens fresh client connections for thread safety.
     """
+    from cvat_sdk import make_client
+
     source_user, source_pass, source_url = source_config
     target_user, target_pass, target_url = target_config
 
@@ -114,6 +116,9 @@ def _migrate_task_internal(
     new_prefix: Optional[str] = None,
 ):
     """Core logic to migrate a single task instance using NAS sharing."""
+    from cvat_sdk.api_client import models
+    from cvat_sdk.core.proxies.tasks import ResourceType
+
     meta = old_task.get_meta()
     server_files = [frame.name for frame in meta.frames]
 
@@ -185,6 +190,8 @@ def migrate_task(
     ] = None,
 ) -> None:
     """Migrates a single task from old server to new server."""
+    from cvat_sdk import make_client
+
     (
         source_cfg,
         target_cfg,
@@ -230,6 +237,9 @@ def migrate_tasks(
     ] = None,
 ) -> None:
     """Migrates all tasks from source to target, matching or creating projects by name."""
+    from cvat_sdk import make_client
+    from cvat_sdk.api_client import models
+
     (
         source_cfg,
         target_cfg,
@@ -314,6 +324,9 @@ def migrate_project_layout(
     ] = None,
 ) -> None:
     """Creates projects on the target server with the same names and labels as the source."""
+    from cvat_sdk import make_client
+    from cvat_sdk.api_client import models
+
     (source_cfg, target_cfg, _, _) = _get_migration_config()
     source_user, source_pass, source_url = source_cfg
     target_user, target_pass, target_url = target_cfg

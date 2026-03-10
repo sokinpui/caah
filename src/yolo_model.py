@@ -149,19 +149,3 @@ class YoloModel:
             overlap_width_ratio=kwargs.get("overlap_w", 0.2),
             verbose=0,
         )
-
-    def get_image_size(self, image_path: Path) -> Tuple[int, int]:
-        """
-        Gets the width and height of an image.
-        """
-        import cv2
-
-        img = cv2.imread(str(image_path))
-        if img is None:
-            print(
-                f"Warning: Could not read image size for {image_path}. Using default.",
-                file=sys.stderr,
-            )
-            return (1920, 1080)
-        height, width, _ = img.shape
-        return (width, height)

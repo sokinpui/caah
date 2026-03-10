@@ -5,13 +5,8 @@ from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional, Set, Tuple
 
 import typer
-from cvat_sdk import make_client
-from cvat_sdk.api_client import models
-from dotenv import load_dotenv
-from PIL import Image
 
 from utils import calculate_ioa, strip_prefix
-from yolo_model import YoloModel
 
 
 def annotate(
@@ -46,6 +41,9 @@ def annotate(
     ] = "0.2:0.2",
 ) -> None:
     """Main execution flow for auto-annotation."""
+    from cvat_sdk import make_client
+    from dotenv import load_dotenv
+
     load_dotenv()
 
     target_ids = []
@@ -98,7 +96,7 @@ def annotate(
 def _annotate_task(
     client: Any,
     task_id: int,
-    model: YoloModel,
+    model: Any,
     batch_size: int,
     jobs: int,
     ioa: float,
@@ -109,6 +107,8 @@ def _annotate_task(
     nas_prefix: str,
 ) -> None:
     """Internal logic to process a single task."""
+    from cvat_sdk.api_client import models
+
     print(f"Fetching task {task_id}...")
     task = client.tasks.retrieve(task_id)
 
@@ -217,8 +217,10 @@ def _process_predictions(
     source_attr_map: Dict[int, int],
     frame_existing: List[Any],
     ioa_threshold: float,
-) -> Tuple[List[models.LabeledShapeRequest], Set[int]]:
+) -> Tuple[List[Any], Set[int]]:
     """Processes model output into CVAT requests."""
+    from cvat_sdk.api_client import models
+
     new_shapes = []
     dropped_ids = set()
 
@@ -265,8 +267,10 @@ def _get_frame_image(
     filename: Optional[str],
     nas_path: Optional[Path],
     prefix: str = "",
-) -> Optional[Image.Image]:
+) -> Optional[Any]:
     """Retrieves image from NAS or CVAT API."""
+    from PIL import Image
+
     if nas_path and filename:
         clean_name = strip_prefix(filename, prefix)
 
@@ -284,8 +288,10 @@ def _get_frame_image(
         return None
 
 
-def _load_yolo_model(model_path_str: str, device: str) -> YoloModel:
+def _load_yolo_model(model_path_str: str, device: str) -> Any:
     """Loads a YOLO model, handling errors."""
+    from yolo_model import YoloModel
+
     model_path = Path(model_path_str)
     if not model_path.exists():
         raise FileNotFoundError(f"Model file not found at {model_path}")

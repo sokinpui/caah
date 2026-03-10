@@ -6,9 +6,6 @@ import tempfile
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from datumaro.components.dataset import Dataset
-from sahi.slicing import slice_coco
-
 from utils import strip_prefix
 
 
@@ -259,6 +256,7 @@ def _resolve_image_dir(extract_path: Path, coco_path: Path) -> Path:
 def coco_to_yolo(input_dir: Path, output_dir: Path):
     if not input_dir.is_dir():
         raise NotADirectoryError(f"Input directory not found: {input_dir}")
+    from datumaro.components.dataset import Dataset
 
     dataset = Dataset.import_from(str(input_dir), format="coco")
     dataset.export(str(output_dir), format="yolo", save_media=True)
@@ -275,6 +273,7 @@ def yolo_to_coco(
 
     if nas_path:
         _fill_images_from_nas(input_dir, nas_path, nas_prefix)
+    from datumaro.components.dataset import Dataset
 
     dataset = Dataset.import_from(str(input_dir), format="yolo")
     dataset.export(str(output_dir), format="coco_instances", save_media=True)
