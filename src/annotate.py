@@ -18,8 +18,10 @@ def annotate(
     model_path: Annotated[
         Path, typer.Option("--model", "-m", help="Path to YOLO model file (.pt).")
     ],
-    task_id: Annotated[int, typer.Option("--task-id", help="CVAT Task ID.")],
-    device: Annotated[str, typer.Option(help="Device (cpu, gpu).")] = "cpu",
+    task_id: Annotated[int, typer.Option("--id", "-i", help="CVAT Task ID.")],
+    device: Annotated[
+        str, typer.Option("--device", "-d", help="Device (cpu, gpu).")
+    ] = "gpu",
     conf: Annotated[float, typer.Option(help="Confidence threshold.")] = 0.25,
     ioa: Annotated[
         float, typer.Option(help="IoA threshold to drop old annotations.")
@@ -33,18 +35,19 @@ def annotate(
     sahi: Annotated[
         bool, typer.Option("--sahi", help="Enable Sliced Inference.")
     ] = False,
-    slice_h: Annotated[int, typer.Option("--slice-h", help="SAHI slice height.")] = 640,
-    slice_w: Annotated[int, typer.Option("--slice-w", help="SAHI slice width.")] = 640,
-    overlap_h: Annotated[
-        float, typer.Option("--overlap-h", help="SAHI overlap height ratio.")
-    ] = 0.2,
-    overlap_w: Annotated[
-        float, typer.Option("--overlap-w", help="SAHI overlap width ratio.")
-    ] = 0.2,
+    size: Annotated[
+        str, typer.Option("--size", help="SAHI slice size as H:W.")
+    ] = "640:640",
+    overlap: Annotated[
+        str, typer.Option("--overlap", help="SAHI overlap ratio as H:W.")
+    ] = "0.2:0.2",
 ) -> None:
     """Main execution flow for auto-annotation."""
     load_dotenv()
     model = _load_yolo_model(str(model_path), device)
+
+    sh, sw = map(int, size.split(":"))
+    oh, ow = map(float, overlap.split(":"))
 
     url, user, password = (
         os.getenv("CVAT_URL"),
@@ -110,10 +113,10 @@ def annotate(
                 batch_results = model.predict(
                     images,
                     sahi=sahi,
-                    slice_h=slice_h,
-                    slice_w=slice_w,
-                    overlap_h=overlap_h,
-                    overlap_w=overlap_w,
+                    slice_h=sh,
+                    slice_w=sw,
+                    overlap_h=oh,
+                    overlap_w=ow,
                 )
 
                 # Post-process

@@ -116,7 +116,7 @@ caah train \
 ```bash
 caah annotate \
   --model ./weights/best.pt \
-  --task-id 123 \
+  --id 123 \
   --device gpu \
   --conf 0.25 \
   --ioa 0.5 \
@@ -125,12 +125,10 @@ caah annotate \
 # with SAHI for Sliced Inference
 caah annotate \
   --model ./weights/best.pt \
-  --task-id 123 \
+  --id 123 \
   --sahi \
-  --slice-h 640 \
-  --slice-w 640 \
-  --overlap-h 0.2 \
-  --overlap-w 0.2
+  --size 640:640 \
+  --overlap 0.2:0.2
 ```
 
 ## Documents

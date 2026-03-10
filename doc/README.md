@@ -16,7 +16,7 @@ Connects to a CVAT server, performs inference on task frames using a YOLO model,
 
 ```bash
 # Annotate task ID 42 using a local YOLO model with 16-frame batching
-caah annotate --model ./weights/best.pt --task-id 42 --device gpu --conf 0.3
+caah annotate --model ./weights/best.pt --id 42 --device gpu --conf 0.3
 ```
 
 ### `cvat` command
@@ -164,9 +164,12 @@ caah migrate project-layout
 - **Description**: Perform auto-annotation on a CVAT task.
 - **Options**:
   - `-m`, `--model` (required): Path to model.
-  - `--task-id` (required): CVAT Task ID.
-  - `--device`: cpu or gpu.
+  - `-i`, `--id` (required): CVAT Task ID.
+  - `-d`, `--device`: cpu or gpu. Default: `gpu`.
   - `--conf`: Confidence threshold (0.0-1.0).
   - `--ioa`: IoA threshold to filter existing annotations.
   - `--jobs`: Parallel workers for image fetching.
   - `--batch`: Inference batch size.
+  - `--sahi`: Enable sliced inference.
+  - `--size`: SAHI slice size H:W.
+  - `--overlap`: SAHI overlap ratio H:W.
