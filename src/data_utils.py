@@ -21,7 +21,9 @@ def _parse_split_ratio(split_str: str) -> List[int]:
             return parts
     except (ValueError, IndexError, ZeroDivisionError):
         pass
-    raise ValueError(f"Invalid split ratio '{split_str}'. Expected 'train:val' (e.g. 8:2)")
+    raise ValueError(
+        f"Invalid split ratio '{split_str}'. Expected 'train:val' (e.g. 8:2)"
+    )
 
 
 def split_coco_dataset(
