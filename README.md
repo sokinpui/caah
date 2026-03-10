@@ -131,7 +131,12 @@ caah annotate \
   --overlap 0.2:0.2
 ```
 
-## Documents
+---
 
-- [Documents](./doc/README.md)
-- [workflow explain](./doc/workflow/README.md)
+Run with `--help/-h` to list avaliable options and commands
+
+```
+caah --help
+
+caah -h
+```
