@@ -369,16 +369,16 @@ def download_coco_images(
     with open(coco_json, "r") as f:
         data = json.load(f)
 
-    img_dir = output_dir / "images"
-    img_dir.mkdir(parents=True, exist_ok=True)
+    # CVAT default export structure puts images under images/default/
+    base_img_dir = output_dir / "images" / "default"
 
     images = data.get("images", [])
 
     def _download_worker(img_info):
         file_name = img_info["file_name"]
         clean_rel_p = strip_prefix(file_name, nas_prefix)
-        src_path = nas_path / clean_rel_p
-        dst_path = img_dir / Path(file_name).name
+        src_path = (nas_path / clean_rel_p).resolve()
+        dst_path = (base_img_dir / file_name).resolve()
 
         if not src_path.exists():
             return False
@@ -394,4 +394,4 @@ def download_coco_images(
     ann_dir = output_dir / "annotations"
     ann_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(coco_json, ann_dir / coco_json.name)
-    print(f"Dataset images downloaded to {img_dir} and annotations to {ann_dir}")
+    print(f"Dataset images downloaded to {base_img_dir} and annotations to {ann_dir}")
