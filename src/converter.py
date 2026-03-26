@@ -1,12 +1,13 @@
 import concurrent.futures
 import json
 import math
+import os
 import shutil
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from utils import strip_prefix
+from utils import find_file, strip_prefix
 
 
 def slice_coco_dataset(
@@ -325,3 +326,72 @@ def _fill_coco_images_from_nas(
         if nas_img.exists():
             local_path.parent.mkdir(parents=True, exist_ok=True)
             local_path.symlink_to(nas_img)
+
+
+def filter_coco_unannotated(input_dir: Path, output_dir: Path):
+    """Removes images that do not have any annotations from a COCO dataset."""
+    coco_json = find_file(input_dir, ["*.json"])
+    if not coco_json:
+        raise FileNotFoundError(f"No COCO JSON found in {input_dir}")
+
+    with open(coco_json, "r") as f:
+        data = json.load(f)
+
+    annotations = data.get("annotations", [])
+    annotated_image_ids = {ann["image_id"] for ann in annotations}
+
+    original_count = len(data.get("images", []))
+    data["images"] = [
+        img for img in data.get("images", []) if img["id"] in annotated_image_ids
+    ]
+
+    ann_dir = output_dir / "annotations"
+    ann_dir.mkdir(parents=True, exist_ok=True)
+    target_json = ann_dir / coco_json.name
+    with open(target_json, "w") as f:
+        json.dump(data, f)
+
+    print(f"Filtered {original_count} -> {len(data['images'])} images.")
+
+
+def download_coco_images(
+    input_dir: Path,
+    output_dir: Path,
+    nas_path: Path,
+    nas_prefix: str,
+    jobs: int = 8,
+):
+    """Downloads (copies) images from NAS to local directory based on COCO annotations."""
+    coco_json = find_file(input_dir, ["*.json"])
+    if not coco_json:
+        raise FileNotFoundError(f"No COCO JSON found in {input_dir}")
+
+    with open(coco_json, "r") as f:
+        data = json.load(f)
+
+    img_dir = output_dir / "images"
+    img_dir.mkdir(parents=True, exist_ok=True)
+
+    images = data.get("images", [])
+
+    def _download_worker(img_info):
+        file_name = img_info["file_name"]
+        clean_rel_p = strip_prefix(file_name, nas_prefix)
+        src_path = nas_path / clean_rel_p
+        dst_path = img_dir / Path(file_name).name
+
+        if not src_path.exists():
+            return False
+
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_path, dst_path)
+        return True
+
+    print(f"Downloading {len(images)} images from NAS...")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+        list(executor.map(_download_worker, images))
+
+    ann_dir = output_dir / "annotations"
+    ann_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(coco_json, ann_dir / coco_json.name)
+    print(f"Dataset images downloaded to {img_dir} and annotations to {ann_dir}")

@@ -5,7 +5,13 @@ from typing import Annotated
 import typer
 from dotenv import load_dotenv
 
-from converter import coco_to_yolo, slice_coco_dataset, yolo_to_coco
+from converter import (
+    coco_to_yolo,
+    download_coco_images,
+    filter_coco_unannotated,
+    slice_coco_dataset,
+    yolo_to_coco,
+)
 from utils import CONTEXT_SETTINGS
 
 dataset_app = typer.Typer(
@@ -87,4 +93,51 @@ def coco2yolo(
     Converts a dataset from COCO to YOLO format.
     """
     coco_to_yolo(input_dir, output_dir)
+    print(output_dir)
+
+
+@dataset_app.command("filter")
+def filter_dataset(
+    input_dir: Annotated[Path, typer.Argument(help="Input COCO directory.")],
+    output_dir: Annotated[Path, typer.Argument(help="Output filtered directory.")],
+):
+    """
+    Filters out images from a COCO dataset that do not have annotations.
+    """
+    filter_coco_unannotated(input_dir, output_dir)
+    print(output_dir)
+
+
+@dataset_app.command("download")
+def download_dataset(
+    input_dir: Annotated[
+        Path, typer.Argument(help="Input COCO directory (annotations only).")
+    ],
+    output_dir: Annotated[Path, typer.Argument(help="Output directory with images.")],
+    jobs: Annotated[
+        int, typer.Option("--jobs", "-j", help="Parallel download jobs.")
+    ] = 8,
+):
+    """
+    Downloads images from NAS for a COCO dataset.
+    Uses NAS_PATH and NAS_PREFIX from environment variables.
+    """
+    load_dotenv()
+    nas_path_str = os.getenv("NAS_PATH")
+    nas_prefix = os.getenv("NAS_PREFIX", "RNT")
+
+    if not nas_path_str:
+        raise ValueError("NAS_PATH must be set in .env to use download.")
+
+    nas_path = Path(nas_path_str)
+    if not nas_path.exists():
+        raise FileNotFoundError(f"NAS_PATH does not exist: {nas_path}")
+
+    download_coco_images(
+        input_dir,
+        output_dir,
+        nas_path=nas_path,
+        nas_prefix=nas_prefix,
+        jobs=jobs,
+    )
     print(output_dir)
