@@ -70,29 +70,26 @@ caah --help
 # YOLO 1.1 dataset with images
 caah cvat project export \
   --id 26 \
-  --output-file dataset_yolo.zip \
+  --output-dir dataset_yolo \
   --format "YOLO 1.1"
 
 # COCO 1.0 dataset with images
 caah cvat project export \
   --id 26 \
-  --output-file dataset_yolo.zip \
+  --output-dir dataset_yolo \
   --format "COCO 1.0"
 
 # COCO 1.0 dataset without images
 caah cvat project export \
   --id 26 \
   --no-images \
-  --output-file dataset_yolo.zip \
+  --output-dir dataset_yolo \
   --format "COCO 1.0"
 ```
 
 ### 2. Dataset Conversion & Slicing (SAHI)
 
 ```bash
-# Unzip the export first
-unzip dataset_yolo.zip -d dataset_yolo
-
 # Convert YOLO to COCO
 caah dataset yolo2coco dataset_yolo dataset_coco
 

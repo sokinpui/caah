@@ -1,7 +1,7 @@
 import json
 import os
 import shutil
-import sys
+import tempfile
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -9,7 +9,7 @@ import requests
 import typer
 from dotenv import load_dotenv
 
-from utils import CONTEXT_SETTINGS
+from utils import CONTEXT_SETTINGS, extract_zip
 
 cvat_app = typer.Typer(help="CVAT operations.", context_settings=CONTEXT_SETTINGS)
 project_app = typer.Typer(help="Project operations.", context_settings=CONTEXT_SETTINGS)
@@ -239,68 +239,45 @@ class CVATApi:
     def export_project(
         self,
         project_id: int,
-        output_file: str,
+        output_dir: Path,
         format_name: str,
         save_images: bool = True,
         only_manual: bool = False,
     ) -> None:
         """Export a project's dataset."""
         url = f"{self.api_url}/projects/{project_id}/dataset/export"
-        params = {"format": format_name, "save_images": save_images}
-
-        if only_manual:
-            filter_logic = {"and": [{"==": [{"var": "source"}, "manual"]}]}
-            params["filter"] = json.dumps(filter_logic)
-
-        response = self.session.post(url, params=params)
-        self._handle_error(
-            response, f"Failed to trigger export for project {project_id}"
-        )
-
-        if response.status_code != 202:
-            raise Exception(
-                f"Unexpected status code for export trigger: {response.status_code}\n{response.text}"
-            )
-
-        rq_id = response.json().get("rq_id")
-        if not rq_id:
-            raise Exception("Could not get request ID for export job.")
-
-        job_result = self.wait_for_job(rq_id)
-        download_url = job_result.get("result_url")
-        if not download_url:
-            raise Exception("Job finished but no result_url found.")
-
-        if not download_url.startswith(("http://", "https://")):
-            download_url = f"{self.base_url}{download_url}"
-
-        self._download_file(download_url, output_file)
+        self._trigger_and_download_dataset(url, output_dir, format_name, save_images, only_manual)
 
     def export_task(
         self,
         task_id: int,
-        output_file: str,
+        output_dir: Path,
         format_name: str,
         save_images: bool = True,
         only_manual: bool = False,
     ) -> None:
         """Export a task's dataset."""
         url = f"{self.api_url}/tasks/{task_id}/dataset/export"
-        params = {"format": format_name, "save_images": save_images}
+        self._trigger_and_download_dataset(url, output_dir, format_name, save_images, only_manual)
 
+    def _trigger_and_download_dataset(
+        self,
+        url: str,
+        output_dir: Path,
+        format_name: str,
+        save_images: bool,
+        only_manual: bool,
+    ) -> None:
+        params = {"format": format_name, "save_images": save_images}
         if only_manual:
             filter_logic = {"and": [{"==": [{"var": "source"}, "manual"]}]}
             params["filter"] = json.dumps(filter_logic)
 
         response = self.session.post(url, params=params)
-        self._handle_error(
-            response, f"Failed to trigger dataset export for task {task_id}"
-        )
+        self._handle_error(response, f"Failed to trigger export at {url}")
 
         if response.status_code != 202:
-            raise Exception(
-                f"Unexpected status code for export trigger: {response.status_code}\n{response.text}"
-            )
+            raise Exception(f"Unexpected status code: {response.status_code}\n{response.text}")
 
         rq_id = response.json().get("rq_id")
         if not rq_id:
@@ -308,13 +285,18 @@ class CVATApi:
 
         job_result = self.wait_for_job(rq_id)
         download_url = job_result.get("result_url")
-        if not download_url:
-            raise Exception("Job finished but no result_url found.")
 
         if not download_url.startswith(("http://", "https://")):
             download_url = f"{self.base_url}{download_url}"
 
-        self._download_file(download_url, output_file)
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_file:
+            tmp_path = Path(tmp_file.name)
+
+        try:
+            self._download_file(download_url, str(tmp_path))
+            extract_zip(tmp_path, output_dir)
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
 
 def _get_api() -> CVATApi:
@@ -357,24 +339,24 @@ def project_list(
 @project_app.command("export")
 def project_export(
     project_id: Annotated[int, typer.Option("--id", "-i")],
-    output_file: Annotated[Path, typer.Option("--output-file", "-o")],
+    output_dir: Annotated[Path, typer.Option("--output-dir", "-o")],
     format_name: Annotated[str, typer.Option("--format", "-f")] = "YOLO 1.1",
     images: Annotated[bool, typer.Option("--images/--no-images")] = True,
     only_manual: bool = False,
 ) -> None:
     _get_api().export_project(
-        project_id, str(output_file), format_name, images, only_manual
+        project_id, output_dir, format_name, images, only_manual
     )
-    print(output_file)
+    print(output_dir)
 
 
 @task_app.command("export")
 def task_export(
     task_id: Annotated[int, typer.Option("--id", "-i")],
-    output_file: Annotated[Path, typer.Option("--output-file", "-o")],
+    output_dir: Annotated[Path, typer.Option("--output-dir", "-o")],
     format_name: Annotated[str, typer.Option("--format", "-f")] = "YOLO 1.1",
     images: Annotated[bool, typer.Option("--images/--no-images")] = True,
     only_manual: bool = False,
 ) -> None:
-    _get_api().export_task(task_id, str(output_file), format_name, images, only_manual)
-    print(output_file)
+    _get_api().export_task(task_id, output_dir, format_name, images, only_manual)
+    print(output_dir)
