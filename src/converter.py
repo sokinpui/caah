@@ -404,3 +404,26 @@ def download_coco_images(
     ann_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(coco_json, ann_dir / coco_json.name)
     print(f"Dataset images downloaded to {base_img_dir} and annotations to {ann_dir}")
+
+def concat_datasets(output_dir: Path, input_dirs: List[Path], format_name: str):
+    """Merges multiple datasets of the same format into a single output."""
+    if not input_dirs:
+        return
+
+    from datumaro.components.dataset import Dataset
+
+    # Datumaro COCO importer requires an 'images' directory to exist.
+    if format_name.lower() == "coco":
+        for d in input_dirs:
+            (d / "images").mkdir(parents=True, exist_ok=True)
+
+    import_fmt = "coco" if format_name.lower() == "coco" else format_name.lower()
+    export_fmt = "coco_instances" if format_name.lower() == "coco" else import_fmt
+
+    dataset = Dataset.import_from(str(input_dirs[0]), format=import_fmt)
+
+    for extra_path in input_dirs[1:]:
+        dataset.update(Dataset.import_from(str(extra_path), format=import_fmt))
+
+    has_media = any(item.media for item in dataset)
+    dataset.export(str(output_dir), format=export_fmt, save_media=has_media)

@@ -1,11 +1,12 @@
 import os
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, List
 
 import typer
 from dotenv import load_dotenv
 
 from converter import (
+    concat_datasets,
     coco_to_yolo,
     download_coco_images,
     filter_coco_unannotated,
@@ -144,4 +145,21 @@ def download_dataset(
         nas_prefix=nas_prefix,
         jobs=jobs,
     )
+    print(output_dir)
+
+
+@dataset_app.command("concat")
+def concat(
+    output_dir: Annotated[Path, typer.Argument(help="Output directory.")],
+    input_dirs: Annotated[
+        List[Path], typer.Argument(help="Input directories to merge.")
+    ],
+    format: Annotated[
+        str, typer.Option("--format", "-f", help="Dataset format (yolo, coco).")
+    ] = "yolo",
+):
+    """
+    Concatenates multiple datasets of the same format into one.
+    """
+    concat_datasets(output_dir, input_dirs, format)
     print(output_dir)
