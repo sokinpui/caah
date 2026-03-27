@@ -8,6 +8,7 @@ from typing import Annotated, Optional
 import requests
 import typer
 from dotenv import load_dotenv
+from converter import concat_datasets
 
 from utils import CONTEXT_SETTINGS, extract_zip
 
@@ -352,11 +353,46 @@ def project_export(
 
 @task_app.command("export")
 def task_export(
-    task_id: Annotated[int, typer.Option("--id", "-i")],
     output_dir: Annotated[Path, typer.Option("--output-dir", "-o")],
+    task_id: Annotated[Optional[int], typer.Option("--id", "-i")] = None,
+    task_ids: Annotated[Optional[str], typer.Option("--ids", help="Task IDs.")] = None,
     format_name: Annotated[str, typer.Option("--format", "-f")] = "YOLO 1.1",
     images: Annotated[bool, typer.Option("--images/--no-images")] = True,
     only_manual: bool = False,
 ) -> None:
-    _get_api().export_task(task_id, output_dir, format_name, images, only_manual)
+    api = _get_api()
+    target_ids = []
+
+    if task_id:
+        target_ids.append(task_id)
+    if task_ids:
+        target_ids.extend([int(tid) for tid in task_ids.split()])
+
+    if not target_ids:
+        raise ValueError("No Task ID provided. Use --id or --ids.")
+
+    if len(target_ids) == 1:
+        api.export_task(target_ids[0], output_dir, format_name, images, only_manual)
+        print(output_dir)
+        return
+
+    _export_and_concat_tasks(api, target_ids, output_dir, format_name, images, only_manual)
+    print(output_dir)
+
+
+def _export_and_concat_tasks(api, target_ids, output_dir, format_name, images, only_manual):
+    """Exports multiple tasks and merges them into a single directory."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_root = Path(tmpdir)
+        task_dirs = []
+
+        for tid in target_ids:
+            task_path = tmp_root / f"task_{tid}"
+            task_path.mkdir()
+            api.export_task(tid, task_path, format_name, images, only_manual)
+            task_dirs.append(task_path)
+
+        # Normalize format for Datumaro (e.g., "YOLO 1.1" -> "yolo")
+        datum_format = "yolo" if "yolo" in format_name.lower() else "coco"
+        concat_datasets(output_dir, task_dirs, datum_format)
     print(output_dir)
