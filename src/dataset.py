@@ -52,6 +52,9 @@ def slice_dataset(
     jobs: Annotated[
         int, typer.Option("--jobs", "-j", help="Number of parallel slicing jobs.")
     ] = 4,
+    min_area_ratio: Annotated[
+        float, typer.Option("--min-area-ratio", "-m", help="Min area ratio.")
+    ] = 0.1,
     nas: Annotated[
         bool,
         typer.Option(
@@ -77,6 +80,7 @@ def slice_dataset(
         (sh, sw),
         (oh, ow),
         jobs,
+        min_area_ratio,
         nas_path=Path(nas_path_str) if nas_path_str else None,
         nas_prefix=nas_prefix,
     )

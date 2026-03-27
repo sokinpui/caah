@@ -16,6 +16,7 @@ def slice_coco_dataset(
     slice_size: Tuple[int, int] = (640, 640),
     overlap_ratio: Tuple[float, float] = (0.2, 0.2),
     jobs: int = 4,
+    min_area_ratio: float = 0.1,
     nas_path: Optional[Path] = None,
     nas_prefix: str = "",
 ):
@@ -67,6 +68,7 @@ def slice_coco_dataset(
                         output_dir,
                         slice_size,
                         overlap_ratio,
+                        min_area_ratio,
                     )
                     for chunk_path in chunk_paths
                 ]
@@ -88,7 +90,12 @@ def slice_coco_dataset(
     for json_file in json_files:
         src_image_dir = _resolve_image_dir(input_dir, json_file)
         sliced_json = _slice_coco_chunk(
-            json_file, src_image_dir, output_dir, slice_size, overlap_ratio
+            json_file,
+            src_image_dir,
+            output_dir,
+            slice_size,
+            overlap_ratio,
+            min_area_ratio,
         )
         all_sliced_jsons.append(sliced_json)
 
@@ -140,6 +147,7 @@ def _slice_coco_chunk(
     output_dir: Path,
     slice_size: Tuple[int, int],
     overlap_ratio: Tuple[float, float],
+    min_area_ratio: float = 0.1,
 ) -> Path:
     """
     Worker that runs SAHI slice_coco on a single chunk JSON.
@@ -161,6 +169,7 @@ def _slice_coco_chunk(
         slice_width=slice_size[1],
         overlap_height_ratio=overlap_ratio[0],
         overlap_width_ratio=overlap_ratio[1],
+        min_area_ratio=min_area_ratio,
         verbose=0,
     )
     return img_out_dir / f"{output_name}_coco.json"
