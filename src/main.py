@@ -9,7 +9,7 @@ from annotate import annotate
 from cvat import cvat_app
 from dataset import dataset_app
 from migrate import migrate_app
-from train import train
+from train import train_app
 from utils import CONTEXT_SETTINGS, setup_logging
 
 # Suppress CVAT SDK version compatibility warnings
@@ -25,7 +25,7 @@ app.command(name="annotate")(annotate)
 app.add_typer(cvat_app, name="cvat")
 app.add_typer(dataset_app, name="dataset")
 app.add_typer(migrate_app, name="migrate")
-app.command(name="train")(train)
+app.add_typer(train_app, name="train")
 
 
 @app.callback()

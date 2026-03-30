@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 from data_utils import create_default_yaml, split_coco_dataset, split_dataset
 from utils import find_file, resolve_device
 
+train_app = typer.Typer(help="Training and dataset preparation.", context_settings={"help_option_names": ["-h", "--help"]})
+
 
 def train_model(
     data_yaml_path: Path,
@@ -101,7 +103,20 @@ def prepare_and_train(
             )
         
         if split:
-            return _run_train(data_yaml_path)
+            return train_model(
+                data_yaml_path,
+                model_spec,
+                epochs,
+                img_size,
+                batch_size,
+                device,
+                nas_path=nas_path,
+                save_period=save_period,
+                workers=workers,
+                project=project,
+                name=name,
+                augmentations=augmentations,
+            )
 
         data_yaml_path = find_file(dataset_root, ["data.yaml"])
         if not data_yaml_path:
@@ -148,7 +163,8 @@ def _load_custom_augmentations(file_path: Path) -> list:
     return getattr(module, "custom_transforms")
 
 
-def train(
+@train_app.command("run")
+def run(
     data: Annotated[str, typer.Option("--data", "-d", help="Dataset directory path.")],
     model: Annotated[
         str, typer.Option("--model", "-m", help="YOLO model version.")
@@ -224,3 +240,30 @@ def train(
         name=name,
         augmentations=custom_aug,
     )
+
+
+@train_app.command("split")
+def split_dataset_cmd(
+    input_dir: Annotated[Path, typer.Argument(help="Input dataset directory.")],
+    output_dir: Annotated[Path, typer.Argument(help="Output directory for the split dataset.")],
+    split: Annotated[str, typer.Option("--split", "-s", help="Split ratio as T:V (e.g., 8:2).")],
+    format: Annotated[str, typer.Option("--format", "-f", help="Dataset format: 'yolo' or 'coco'.")] = "yolo",
+    nas: Annotated[bool, typer.Option("--nas", help="Enable NAS optimization.")] = False,
+):
+    """Splits a dataset into train/val sets without training."""
+    load_dotenv()
+    
+    nas_path = os.getenv("NAS_PATH") if nas else None
+    nas_prefix = os.getenv("NAS_PREFIX", "")
+
+    if format.lower() == "yolo":
+        split_dataset(input_dir, output_dir, split, nas_path=nas_path, nas_prefix=nas_prefix)
+    elif format.lower() == "coco":
+        split_coco_dataset(input_dir, output_dir, split, nas_path=nas_path, nas_prefix=nas_prefix)
+    else:
+        raise ValueError(f"Unsupported format: {format}")
+
+    if not (output_dir / "data.yaml").exists():
+        create_default_yaml(output_dir)
+
+    print(output_dir)
