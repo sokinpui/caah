@@ -54,8 +54,11 @@ def train_model(
     )
 
     print("--- Training Complete ---")
-    best_model_path = f"{results.save_dir}/weights/best.pt"
-    print(best_model_path)
+
+    if results is None:
+        return
+
+    print(f"{results.save_dir}/weights/best.pt")
 
 
 def prepare_and_train(
