@@ -17,6 +17,7 @@ def slice_coco_dataset(
     overlap_ratio: Tuple[float, float] = (0.2, 0.2),
     jobs: int = 4,
     min_area_ratio: float = 0.1,
+    ignore_negative_samples: bool = False,
     nas_path: Optional[Path] = None,
     nas_prefix: str = "",
 ):
@@ -69,6 +70,7 @@ def slice_coco_dataset(
                         slice_size,
                         overlap_ratio,
                         min_area_ratio,
+                        ignore_negative_samples,
                     )
                     for chunk_path in chunk_paths
                 ]
@@ -96,6 +98,7 @@ def slice_coco_dataset(
             slice_size,
             overlap_ratio,
             min_area_ratio,
+            ignore_negative_samples,
         )
         all_sliced_jsons.append(sliced_json)
 
@@ -148,6 +151,7 @@ def _slice_coco_chunk(
     slice_size: Tuple[int, int],
     overlap_ratio: Tuple[float, float],
     min_area_ratio: float = 0.1,
+    ignore_negative_samples: bool = False,
 ) -> Path:
     """
     Worker that runs SAHI slice_coco on a single chunk JSON.
@@ -170,6 +174,7 @@ def _slice_coco_chunk(
         overlap_height_ratio=overlap_ratio[0],
         overlap_width_ratio=overlap_ratio[1],
         min_area_ratio=min_area_ratio,
+        ignore_negative_samples=ignore_negative_samples,
         verbose=0,
     )
     return img_out_dir / f"{output_name}_coco.json"

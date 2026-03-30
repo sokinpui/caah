@@ -56,6 +56,9 @@ def slice_dataset(
     min_area_ratio: Annotated[
         float, typer.Option("--min-area-ratio", "-m", help="Min area ratio.")
     ] = 0.1,
+    ignore_negative_samples: Annotated[
+        bool, typer.Option("--ignore-negative-samples", help="Ignore images without annotations.")
+    ] = False,
     nas: Annotated[
         bool,
         typer.Option(
@@ -82,6 +85,7 @@ def slice_dataset(
         (oh, ow),
         jobs,
         min_area_ratio,
+        ignore_negative_samples,
         nas_path=Path(nas_path_str) if nas_path_str else None,
         nas_prefix=nas_prefix,
     )
