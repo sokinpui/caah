@@ -172,6 +172,30 @@ def split_dataset(
     return yaml_path
 
 
+def create_default_yaml(dataset_root: Path) -> Path:
+    """Creates a default data.yaml for a YOLO dataset if missing."""
+    import yaml
+
+    names = find_class_names(dataset_root)
+    
+    # Detect if we have the standard images/labels structure or a flat structure
+    train_path = "images/train" if (dataset_root / "images/train").is_dir() else "."
+    val_path = "images/val" if (dataset_root / "images/val").is_dir() else train_path
+
+    yaml_data = {
+        "path": str(dataset_root.absolute()),
+        "train": train_path,
+        "val": val_path,
+        "names": {i: name for i, name in enumerate(names)},
+    }
+
+    yaml_path = dataset_root / "data.yaml"
+    with open(yaml_path, "w") as f:
+        yaml.dump(yaml_data, f, sort_keys=False)
+
+    return yaml_path
+
+
 def find_class_names(extracted_path: Path) -> list[str]:
     """Finds class names from data.yaml or obj.names."""
     import yaml

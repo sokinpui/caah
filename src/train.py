@@ -7,7 +7,7 @@ from typing import Annotated, Optional
 import typer
 from dotenv import load_dotenv
 
-from data_utils import split_coco_dataset, split_dataset
+from data_utils import create_default_yaml, split_coco_dataset, split_dataset
 from utils import find_file, resolve_device
 
 
@@ -99,11 +99,14 @@ def prepare_and_train(
             data_yaml_path = split_coco_dataset(
                 dataset_root, split_dir, split, nas_path=nas_path, nas_prefix=nas_prefix
             )
-        else:
-            data_yaml_path = find_file(dataset_root, ["data.yaml"])
+        
+        if split:
+            return _run_train(data_yaml_path)
 
+        data_yaml_path = find_file(dataset_root, ["data.yaml"])
         if not data_yaml_path:
-            raise FileNotFoundError(f"Could not find 'data.yaml' in {dataset_path}")
+            print("No data.yaml found. Generating default...")
+            data_yaml_path = create_default_yaml(dataset_root)
 
         train_model(
             data_yaml_path,
