@@ -1,5 +1,4 @@
 import sys
-import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -22,7 +21,6 @@ class YoloModel:
         self.model = YOLO(model_path)
         self.device = resolve_device(device)
         self.labels = self.model.names
-        self._lock = threading.Lock()
         self._sahi_model = None
         print(f"YOLO model loaded from {model_path}", file=sys.stderr)
         print(f"Using device: {self.device}", file=sys.stderr)
@@ -63,12 +61,7 @@ class YoloModel:
             ]
             return self._format_results(sources, results) if is_batch else results[0]
 
-        with self._lock:
-            results = self.model(valid_sources, verbose=False, device=self.device, batch=batch_size)
-
-        # Map results back to the original input indices (handling Nones)
-        all_annotations = []
-        result_idx = 0
+        results = self.model(valid_sources, verbose=False, device=self.device, batch=batch_size)
 
         return (
             self._format_results(sources, results)
