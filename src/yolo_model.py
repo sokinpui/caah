@@ -35,6 +35,7 @@ class YoloModel:
         slice_w: int = 640,
         overlap_h: float = 0.2,
         overlap_w: float = 0.2,
+        batch_size: int = 16,
     ) -> Union[List[Dict], List[List[Dict]]]:
         """
         Performs inference on image(s) and returns annotations.
@@ -56,13 +57,14 @@ class YoloModel:
                     slice_w=slice_w,
                     overlap_h=overlap_h,
                     overlap_w=overlap_w,
+                    batch_size=batch_size,
                 )
                 for src in valid_sources
             ]
             return self._format_results(sources, results) if is_batch else results[0]
 
         with self._lock:
-            results = self.model(valid_sources, verbose=False, device=self.device)
+            results = self.model(valid_sources, verbose=False, device=self.device, batch=batch_size)
 
         # Map results back to the original input indices (handling Nones)
         all_annotations = []
@@ -134,6 +136,8 @@ class YoloModel:
                 device=self.device,
                 confidence_threshold=0.25,
             )
+
+        self._sahi_model.slice_batch_size = kwargs.get("batch_size", 16)
 
         # Convert PIL Image to numpy array if needed
         if hasattr(image, "mode") and hasattr(image, "convert"):

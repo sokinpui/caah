@@ -140,8 +140,8 @@ def _annotate_task(
     dropped_ids: Set[int] = set()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
-        for batch_start in range(0, task.size, batch_size):
-            batch_end = min(batch_start + batch_size, task.size)
+        for batch_start in range(0, task.size, jobs):
+            batch_end = min(batch_start + jobs, task.size)
             frame_ids = list(range(batch_start, batch_end))
 
             # Parallel Fetch
@@ -162,6 +162,7 @@ def _annotate_task(
                 slice_w=size[1],
                 overlap_h=overlap[0],
                 overlap_w=overlap[1],
+                batch_size=batch_size,
             )
 
             # Post-process
