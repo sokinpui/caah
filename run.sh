@@ -45,11 +45,11 @@ caah dataset filter "$EXPORT_DIR" "$FILTER_DIR"
 echo
 
 echo "[3/5] Downloading images from NAS..."
-caah dataset download "$FILTER_DIR" "$DOWNLOAD_DIR"
+caah dataset download "$FILTER_DIR" "$DOWNLOAD_DIR" -j 8
 echo
 
 echo "[4/5] Slicing dataset into patches..."
-caah dataset slice "$DOWNLOAD_DIR" "$SLICE_DIR"
+caah dataset slice "$DOWNLOAD_DIR" "$SLICE_DIR" --size 640:640 --overlap 0.2:0.2 --jobs 4 --min-area-ratio 1.0
 echo
 
 echo "[5/5] Converting final dataset to YOLO format..."
