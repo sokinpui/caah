@@ -366,7 +366,8 @@ def task_export(
     if task_id:
         target_ids.append(task_id)
     if task_ids:
-        target_ids.extend([int(tid) for tid in task_ids.replace(",", " ").split()])
+        # Handle both comma and space separated IDs
+        target_ids.extend([int(tid) for tid in task_ids.replace(",", " ").split() if tid.strip()])
 
     if not target_ids:
         raise ValueError("No Task ID provided. Use --id or --ids.")

@@ -410,25 +410,155 @@ def download_coco_images(
     shutil.copy2(coco_json, ann_dir / coco_json.name)
     print(f"Dataset images downloaded to {base_img_dir} and annotations to {ann_dir}")
 
+
 def concat_datasets(output_dir: Path, input_dirs: List[Path], format_name: str):
-    """Merges multiple datasets of the same format into a single output."""
-    if not input_dirs:
+    """
+    Merges multiple COCO datasets manually.
+    Prevents 'ghost annotations' by giving every image a unique global ID.
+    """
+    if format_name.lower() != "coco":
+        print(f"This manual implementation only supports COCO. Received: {format_name}")
         return
 
-    from datumaro.components.dataset import Dataset
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Datumaro COCO importer requires an 'images' directory to exist.
-    if format_name.lower() == "coco":
-        for d in input_dirs:
-            (d / "images").mkdir(parents=True, exist_ok=True)
+    merged_data = {"images": [], "annotations": [], "categories": []}
 
-    import_fmt = "coco" if format_name.lower() == "coco" else format_name.lower()
-    export_fmt = "coco_instances" if format_name.lower() == "coco" else import_fmt
+    category_map = {}  # name -> new_category_id
+    image_id_counter = 1
+    ann_id_counter = 1
 
-    dataset = Dataset.import_from(str(input_dirs[0]), format=import_fmt)
+    for input_dir in input_dirs:
+        json_files = list(input_dir.glob("*.json"))
+        if not json_files:
+            json_files = list(input_dir.glob("annotations/*.json"))
 
-    for extra_path in input_dirs[1:]:
-        dataset.update(Dataset.import_from(str(extra_path), format=import_fmt))
+        if not json_files:
+            print(f"Skipping {input_dir}: No JSON found.")
+            continue
 
-    has_media = any(item.media for item in dataset)
-    dataset.export(str(output_dir), format=export_fmt, save_media=has_media)
+        with open(json_files[0], "r") as f:
+            data = json.load(f)
+
+        local_cat_to_global = {}
+        for cat in data.get("categories", []):
+            name = cat["name"]
+            if name not in category_map:
+                new_id = len(category_map) + 1
+                category_map[name] = new_id
+                merged_data["categories"].append(
+                    {
+                        "id": new_id,
+                        "name": name,
+                        "supercategory": cat.get("supercategory", ""),
+                    }
+                )
+            local_cat_to_global[cat["id"]] = category_map[name]
+
+        local_img_to_global = {}
+        for img in data.get("images", []):
+            old_id = img["id"]
+            new_id = image_id_counter
+            local_img_to_global[old_id] = new_id
+
+            new_img = img.copy()
+            new_img["id"] = new_id
+            merged_data["images"].append(new_img)
+
+            image_id_counter += 1
+
+        for ann in data.get("annotations", []):
+            new_ann = ann.copy()
+            new_ann["id"] = ann_id_counter
+            new_ann["image_id"] = local_img_to_global[ann["image_id"]]
+            new_ann["category_id"] = local_cat_to_global[ann["category_id"]]
+
+            merged_data["annotations"].append(new_ann)
+            ann_id_counter += 1
+
+        print(f"Processed {input_dir.name}: {len(data.get('images', []))} images.")
+
+    output_path = output_dir / "instances_default.json"
+    with open(output_path, "w") as f:
+        json.dump(merged_data, f, indent=4)
+
+    print(f"Successfully merged into: {output_path}")
+
+
+def concat_datasets_yolo(output_dir: Path, input_dirs: List[Path]):
+    """
+    Merges multiple YOLO datasets manually.
+    Prevents collisions by prefixing filenames with the source directory name.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    obj_data_dir = output_dir / "obj_train_data"
+    obj_data_dir.mkdir(exist_ok=True)
+
+    global_classes = []  # List of class names
+
+    all_image_paths = []
+
+    for input_dir in input_dirs:
+        prefix = input_dir.name
+
+        names_file = input_dir / "obj.names"
+        if not names_file.exists():
+            print(f"Skipping {input_dir}: obj.names not found.")
+            continue
+
+        with open(names_file, "r") as f:
+            local_classes = [line.strip() for line in f if line.strip()]
+
+        # map: Local ID -> Global ID
+        local_to_global_map = {}
+        for i, name in enumerate(local_classes):
+            if name not in global_classes:
+                global_classes.append(name)
+            local_to_global_map[i] = global_classes.index(name)
+
+        src_data_dir = input_dir / "obj_train_data"
+        if not src_data_dir.exists():
+            src_data_dir = input_dir
+
+        for label_file in src_data_dir.glob("*.txt"):
+            if label_file.name == "classes.txt":
+                continue
+
+            new_filename = f"{prefix}_{label_file.name}"
+            target_label_path = obj_data_dir / new_filename
+
+            with open(label_file, "r") as f_in:
+                lines = f_in.readlines()
+
+            with open(target_label_path, "w") as f_out:
+                for line in lines:
+                    parts = line.split()
+                    if not parts:
+                        continue
+                    local_id = int(parts[0])
+                    global_id = local_to_global_map[local_id]
+                    f_out.write(f"{global_id} {' '.join(parts[1:])}\n")
+
+            for ext in [".jpg", ".jpeg", ".png", ".PNG", ".JPG"]:
+                img_file = label_file.with_suffix(ext)
+                if img_file.exists():
+                    new_img_name = f"{prefix}_{img_file.name}"
+                    shutil.copy2(img_file, obj_data_dir / new_img_name)
+                    all_image_paths.append(f"obj_train_data/{new_img_name}")
+                    break
+
+    with open(output_dir / "obj.names", "w") as f:
+        for name in global_classes:
+            f.write(f"{name}\n")
+
+    with open(output_dir / "train.txt", "w") as f:
+        for path in all_image_paths:
+            f.write(f"{path}\n")
+
+    with open(output_dir / "obj.data", "w") as f:
+        f.write(f"classes = {len(global_classes)}\n")
+        f.write("train = train.txt\n")
+        f.write("names = obj.names\n")
+        f.write("backup = backup/\n")
+
+    print(f"Successfully merged {len(input_dirs)} YOLO datasets into {output_dir}")
